@@ -1,0 +1,51 @@
+name: Chorus
+
+options:
+  bundleIdPrefix: in.onpy
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  minimumXcodeGenVersion: "2.44.0"
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: ${CHORUS_TEAM_ID}
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    # Exported by the Makefile, which owns VERSION. Command-line builds override
+    # these at build time regardless; baking them here keeps an Xcode GUI build
+    # opened after `make generate` agreeing with the packaged archive.
+    MARKETING_VERSION: ${CHORUS_VERSION}
+    CURRENT_PROJECT_VERSION: ${CHORUS_BUILD_NUMBER}
+    GENERATE_INFOPLIST_FILE: NO
+    ENABLE_HARDENED_RUNTIME: YES
+    ALWAYS_SEARCH_USER_PATHS: NO
+    DEAD_CODE_STRIPPING: YES
+    # macOS grants an app group container to a sandboxed app when the identifier
+    # is prefixed with the team identifier in its code signature. That form needs
+    # no portal registration and no provisioning profile, so deriving it from
+    # DEVELOPMENT_TEAM lets any contributor build with their own team and get
+    # their own container. Providers supply CHORUS_GROUP_NAME; nothing else in
+    # the tree may spell out a team identifier.
+    CHORUS_APP_GROUP: $(DEVELOPMENT_TEAM).$(CHORUS_GROUP_NAME)
+
+packages:
+  ChorusKit:
+    path: Packages/ChorusKit
+
+targetTemplates:
+  ProviderContainer:
+    type: application
+    platform: macOS
+    settings:
+      base:
+        COMBINE_HIDPI_IMAGES: YES
+
+  SpeechProvider:
+    type: app-extension
+    platform: macOS
+    settings:
+      base:
+        COPY_PHASE_STRIP: NO

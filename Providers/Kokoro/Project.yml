@@ -1,0 +1,79 @@
+targets:
+  ChorusKokoro:
+    templates: [ProviderContainer]
+    sources:
+      - path: Providers/Kokoro/App
+        excludes:
+          - Info.plist
+          - Entitlements.plist
+      - path: Providers/Kokoro/LICENSE
+        buildPhase: resources
+      - path: LICENSES/Apache-2.0.txt
+        buildPhase: resources
+      - path: LICENSES/ONNX-Runtime-MIT.txt
+        buildPhase: resources
+      - path: THIRD_PARTY_NOTICES.md
+        buildPhase: resources
+      - path: BuildSupport/Brand/ChorusSoundwave.png
+        buildPhase: resources
+      - path: BuildSupport/Brand/ChorusSoundwaveDark.png
+        buildPhase: resources
+      - path: .artifacts/Kokoro/Brand/AppIcon.xcassets
+    settings:
+      base:
+        INFOPLIST_FILE: Providers/Kokoro/App/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: in.onpy.Chorus.Kokoro
+        CHORUS_GROUP_NAME: in.onpy.Chorus.Kokoro
+        CODE_SIGN_ENTITLEMENTS: Providers/Kokoro/App/Entitlements.plist
+        PRODUCT_NAME: Chorus Kokoro
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies:
+      - target: KokoroSynthesizer
+        embed: true
+      - package: ChorusKit
+        product: ChorusInstallerUI
+
+  KokoroSynthesizer:
+    templates: [SpeechProvider]
+    sources:
+      - path: Providers/Kokoro/Extension
+        excludes:
+          - Info.plist
+          - Extension.entitlements
+      - Providers/Kokoro/Engine
+      - path: Providers/Kokoro/Native/CKokoroORT
+        excludes: ["include/**"]
+      - path: .artifacts/Kokoro/Models/voices
+        type: folder
+        buildPhase: resources
+      - path: .artifacts/Kokoro/Models/tokenizer.json
+        buildPhase: resources
+      - path: Providers/Kokoro/App/Resources/Provider.json
+        buildPhase: resources
+      - path: .artifacts/Kokoro/Vendor/espeak-ng/share/espeak-ng-data
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        INFOPLIST_FILE: Providers/Kokoro/Extension/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: in.onpy.Chorus.Kokoro.Synthesizer
+        CHORUS_GROUP_NAME: in.onpy.Chorus.Kokoro
+        CODE_SIGN_ENTITLEMENTS: Providers/Kokoro/Extension/Extension.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: Providers/Kokoro/Extension/Kokoro-Bridging-Header.h
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/Providers/Kokoro/Native/CKokoroORT/include
+          - $(SRCROOT)/.artifacts/Kokoro/Vendor/espeak-ng/include
+          - $(SRCROOT)/.artifacts/Kokoro/Vendor/onnxruntime/include
+        LIBRARY_SEARCH_PATHS:
+          - $(SRCROOT)/.artifacts/Kokoro/Vendor/espeak-ng/lib
+          - $(SRCROOT)/.artifacts/Kokoro/Vendor/onnxruntime/lib
+        OTHER_LDFLAGS:
+          - -lespeak-ng
+        LD_RUNPATH_SEARCH_PATHS:
+          - "@executable_path/../Frameworks"
+    dependencies:
+      - framework: .artifacts/Kokoro/Vendor/onnxruntime/lib/libonnxruntime.dylib
+        embed: true
+        codeSign: true
+      - package: ChorusKit
+        product: ChorusProviderKit
