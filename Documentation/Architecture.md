@@ -2,6 +2,15 @@
 
 ## Product boundary
 
+The Chorus reader (`Hub`) uses macOS speech APIs and a completion hook (`CLI`) sharing
+contracts in `Shared`. It opens an installed companion for model maintenance, but does
+not embed providers or access their model containers. Companion downloads and remote
+update feeds remain deferred.
+
+Each app's `Project.yml` declares its own project, scheme, version, and build number.
+`Chorus.xcodeproj` and `Kokoro.xcodeproj` are generated independently, with outputs under
+`build/Chorus/` and `build/Kokoro/`. [Build configuration](Building.md).
+
 Each provider is a containing app with exactly one speech synthesis extension:
 
 ```text
@@ -40,7 +49,7 @@ macOS grants a sandboxed app its group container on the strength of the team ide
 its code signature, so the `<team>.<name>` form needs no portal registration and no
 provisioning profile. That is what lets any contributor build with their own team.
 
-No team identifier appears anywhere in the tree. A provider declares `CHORUS_GROUP_NAME`;
+No team identifier is committed. A provider declares `CHORUS_GROUP_NAME`;
 `CHORUS_APP_GROUP` prefixes it with `$(DEVELOPMENT_TEAM)`, and the build expands that one
 value into both entitlements files and the `ChorusAppGroup` key of both `Info.plist` files.
 The team reaches `xcodebuild` rather than XcodeGen, so the generated project names no team

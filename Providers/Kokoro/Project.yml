@@ -1,3 +1,22 @@
+name: Kokoro
+include:
+  - path: BuildSupport/XcodeGen/Base.yml
+    relativePaths: false
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # The pinned native runtime and phonemizer are built for Apple Silicon.
+    ARCHS: arm64
+schemes:
+  Kokoro:
+    build:
+      targets:
+        ChorusKokoro: all
+    run:
+      config: Debug
+    archive:
+      config: Release
 targets:
   ChorusKokoro:
     templates: [ProviderContainer]

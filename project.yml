@@ -1,7 +1,0 @@
-include:
-  - path: BuildSupport/XcodeGen/Base.yml
-    relativePaths: false
-  # Expanded by XcodeGen from the environment; the Makefile exports it from
-  # PROVIDER, so no provider is named anywhere in the shared build spec.
-  - path: Providers/${CHORUS_PROVIDER}/Project.yml
-    relativePaths: false

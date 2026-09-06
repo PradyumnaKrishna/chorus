@@ -48,7 +48,7 @@ struct KokoroVoice: Hashable {
     var voiceIdentifier: String { "in.onpy.chorus.kokoro.\(id)" }
 
     /// Name shown in the system voice picker.
-    var systemName: String { "Chorus \(displayName)" }
+    var systemName: String { displayName }
 
     /// Voice files are named `<language><gender>_<name>.bin`.
     init?(fileStem: String) {
@@ -71,4 +71,3 @@ struct KokoroVoice: Hashable {
             .sorted { ($0.language.rawValue, $0.displayName) < ($1.language.rawValue, $1.displayName) }
     }
 }
-

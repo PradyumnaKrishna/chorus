@@ -1,129 +1,65 @@
-# Stable public entry points; implementation details live beside the provider that owns them.
 SHELL := /bin/bash
-# Inert on stock macOS, which ships GNU Make 3.81; .SHELLFLAGS arrived in 3.82.
-# Recipes must therefore check their own failures rather than rely on `set -e`.
-.SHELLFLAGS := -eu -o pipefail -c
 
-# ---------------------------------------------------------------------------
-# Inputs. Everything below this block is derived; there is no provider table.
-# ---------------------------------------------------------------------------
+APP ?= Chorus
 
-# A directory name under Providers/. Adding a provider means adding a directory.
-PROVIDER ?= Kokoro
-VERSION  ?= 0.1.0
-CONFIG   ?= Release
+APP_DIR = $(if $(filter Chorus,$(APP)),Hub,Providers/$(APP))
+XCODEBUILD = xcodebuild -project "$(APP).xcodeproj" -scheme "$(APP)" \
+	-derivedDataPath "build/$(APP)" \
+	-destination 'generic/platform=macOS' -quiet
 
-# Signing. CHORUS_TEAM_ID selects the Apple Developer team; the app group
-# container and its path on every user's Mac derive from it, so it is resolved
-# once and never spelled out in the tree. Left unset for a signed build it is
-# read from the keychain, which refuses to guess when several teams exist.
-# Keep the identity partial: automatic signing rejects a fully qualified name.
-CHORUS_TEAM_ID ?= UM9Y794Q4L
-CHORUS_SIGN_IDENTITY ?= Apple Development
+.PHONY: debug release validate bootstrap icon generate test test-hub render engine-smoke clean
 
-# CFBundleVersion must increase for every build a user could receive, which
-# CFBundleShortVersionString does not: a rebuilt 0.1.0 is a distinct binary.
-BUILD_NUMBER ?= $(shell git rev-list --count HEAD 2>/dev/null || echo 1)
+# Signing is independent of Debug/Release and requires both environment values.
+ifeq ($(and $(strip $(DEVELOPMENT_TEAM)),$(filter-out -,$(strip $(CODE_SIGN_IDENTITY)))),)
+XCODEBUILD += CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+else
+XCODEBUILD += DEVELOPMENT_TEAM="$$DEVELOPMENT_TEAM" CODE_SIGN_IDENTITY="$$CODE_SIGN_IDENTITY"
+endif
 
-BUILD_DIR := build
-DIST_DIR  := dist
-PROJECT   := Chorus.xcodeproj
+debug: generate
+	$(XCODEBUILD) -configuration Debug build
 
-# ---------------------------------------------------------------------------
-# Derived from the provider directory name.
-# ---------------------------------------------------------------------------
+release: generate
+	$(XCODEBUILD) -configuration Release build
 
-PROVIDER_DIR := Providers/$(PROVIDER)
-SCHEME       := Chorus$(PROVIDER)
-APP          := $(BUILD_DIR)/Build/Products/$(CONFIG)/Chorus $(PROVIDER).app
-ARCHIVE      := $(DIST_DIR)/Chorus-$(PROVIDER)-$(VERSION)
+validate:
+	@[[ "$(APP)" =~ ^[A-Za-z][A-Za-z0-9]*$$ ]] || { echo 'APP must be an app directory name.' >&2; exit 1; }
+	@test -f "$(APP_DIR)/Project.yml" || { echo 'App Project.yml not found.' >&2; exit 1; }
 
-$(if $(wildcard $(PROVIDER_DIR)),,$(error No provider directory at $(PROVIDER_DIR)))
+bootstrap: validate
+	@if [[ -f "$(APP_DIR)/BuildSupport/bootstrap.sh" ]]; then bash "$(APP_DIR)/BuildSupport/bootstrap.sh"; fi
 
-# Read by the include path in project.yml, so the generated project contains
-# exactly the provider being built.
-CHORUS_PROVIDER     := $(PROVIDER)
-CHORUS_VERSION      := $(VERSION)
-CHORUS_BUILD_NUMBER := $(BUILD_NUMBER)
-export CHORUS_PROVIDER CHORUS_VERSION CHORUS_BUILD_NUMBER
-export CHORUS_TEAM_ID CHORUS_SIGN_IDENTITY
+icon: validate
+	@bash BuildSupport/Brand/build-icon.sh "$(APP)" "$(APP)"
 
-# Real files, so a rebuild does not recompose the icon or rerun XcodeGen.
-BOOTSTRAP_STAMP := .artifacts/$(PROVIDER)/.bootstrapped
-ICON_SET        := .artifacts/$(PROVIDER)/Brand/AppIcon.xcassets/AppIcon.appiconset/Contents.json
-PBXPROJ         := $(PROJECT)/project.pbxproj
+generate: bootstrap icon
+	xcodegen generate --spec "$(APP_DIR)/Project.yml" --project-root . --project . --quiet
 
-# XcodeGen globs the provider's directories, so the project must be regenerated
-# when a source file is added or removed -- not merely when one is edited. A
-# directory's mtime changes exactly on add and remove, so depend on the tree.
-PROVIDER_TREE   := $(shell find $(PROVIDER_DIR) -type d 2>/dev/null)
+test-hub:
+	mkdir -p build/Tests
+	swiftc -swift-version 5 -strict-concurrency=complete -module-cache-path build/ModuleCache.noindex \
+		Shared/*.swift Tests/Hub/main.swift -o build/Tests/chorus-hub-tests
+	build/Tests/chorus-hub-tests
 
-MODULE_CACHES := CLANG_MODULE_CACHE_PATH=/private/tmp/chorus-clang-module-cache \
-                 SWIFTPM_MODULECACHE_OVERRIDE=/private/tmp/chorus-swiftpm-module-cache
+test: test-hub
+	swift test --package-path Packages/ChorusKit --scratch-path build/Tests/ChorusKit
+	find Providers Hub -type f \( -name '*.plist' -o -name '*.entitlements' \) -print0 | xargs -0 plutil -lint
 
-XCODEBUILD = xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration $(CONFIG) \
-             -derivedDataPath $(BUILD_DIR) -quiet \
-             MARKETING_VERSION=$(VERSION) CURRENT_PROJECT_VERSION=$(BUILD_NUMBER)
-
-.PHONY: all icon bootstrap generate build build-unsigned package test render engine-smoke clean distclean
-
-all: build-unsigned
-
-# ---------------------------------------------------------------------------
-
-$(BOOTSTRAP_STAMP): $(wildcard $(PROVIDER_DIR)/BuildSupport/*.sh) \
-                    $(wildcard $(PROVIDER_DIR)/BuildSupport/Dependencies/*.sh) \
-                    $(wildcard $(PROVIDER_DIR)/Resources/*)
-	$(PROVIDER_DIR)/BuildSupport/bootstrap.sh
-	mkdir -p $(dir $@)
-	touch $@
-
-$(ICON_SET): BuildSupport/Brand/main.swift BuildSupport/Brand/ChorusSoundwave.png \
-             BuildSupport/Brand/AppIconContents.json
-	BuildSupport/Brand/build-icon.sh "$(PROVIDER)" "$(PROVIDER)"
-
-$(PBXPROJ): project.yml BuildSupport/XcodeGen/Base.yml $(PROVIDER_DIR)/Project.yml \
-            $(PROVIDER_TREE) $(ICON_SET) $(BOOTSTRAP_STAMP)
-	xcodegen generate --quiet
-
-bootstrap: $(BOOTSTRAP_STAMP)
-icon: $(ICON_SET)
-generate: $(PBXPROJ)
-
-# The team is resolved here rather than at generate time and passed straight to
-# xcodebuild, so DEVELOPMENT_TEAM -- and the CHORUS_APP_GROUP derived from it --
-# resolve at build time. The generated project therefore names no team at all.
-build: $(PBXPROJ)
-	@team="$$(BuildSupport/team-id.sh)" || exit 1; \
-	$(XCODEBUILD) DEVELOPMENT_TEAM="$$team" CODE_SIGN_IDENTITY="$(CHORUS_SIGN_IDENTITY)" build
-
-build-unsigned: $(PBXPROJ)
-	$(XCODEBUILD) CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM= build
-
-# Distribution is intentionally based on the signed build target.
-package: build
-	mkdir -p $(DIST_DIR)
-	ditto -c -k --keepParent "$(APP)" "$(ARCHIVE).zip"
-	shasum -a 256 "$(ARCHIVE).zip" > "$(ARCHIVE).sha256"
-
-test:
-	env $(MODULE_CACHES) \
-		swift test --package-path Packages/ChorusKit --scratch-path /private/tmp/chorus-kit-build
-	find Providers -type f \( -name '*.plist' -o -name '*.entitlements' \) -print0 \
-		| xargs -0 plutil -lint
-
-render: build-unsigned
-	env $(MODULE_CACHES) \
+render: icon
+	@set -eu; mkdir -p "build/$(APP)"; \
+	if [[ "$(APP)" == Chorus ]]; then \
+		swiftc -swift-version 5 -D CHORUS_SNAPSHOT -module-cache-path build/ModuleCache.noindex \
+			-parse-as-library Shared/*.swift Hub/*.swift Tests/Hub/RenderApp.swift -o build/Chorus/render; \
+		build/Chorus/render; \
+	else \
 		swift run --package-path Packages/ChorusKit chorus-installer-preview \
-			$(PROVIDER_DIR)/App/Resources/Provider.json \
-			BuildSupport/Brand/ChorusSoundwave.png \
-			$(BUILD_DIR)
+			"$(APP_DIR)/App/Resources/Provider.json" BuildSupport/Brand/ChorusSoundwave.png "build/$(APP)"; \
+	fi
 
-engine-smoke: build-unsigned
-	$(PROVIDER_DIR)/BuildSupport/test-engine.sh
+engine-smoke: debug
+	@set -eu; apps=("build/$(APP)/Build/Products/Debug/"*.app); \
+	test "$${#apps[@]}" -eq 1 && test -d "$${apps[0]}"; \
+	bash "$(APP_DIR)/BuildSupport/test-engine.sh" "$${apps[0]}"
 
-clean:
-	rm -rf $(BUILD_DIR) $(DIST_DIR) $(PROJECT)
-
-distclean: clean
-	rm -rf .artifacts .build
+clean: validate
+	rm -rf "build/$(APP)" "dist/$(APP)" "$(APP).xcodeproj"

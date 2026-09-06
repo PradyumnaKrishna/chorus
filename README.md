@@ -1,35 +1,90 @@
+<p align="center">
+  <img src="BuildSupport/Brand/ChorusSoundwave.png" width="80" alt="Chorus soundwave">
+</p>
+
 # Chorus
 
-On-device text-to-speech voices for macOS. Each voice provider ships as a small app with a
-speech synthesis extension, so its voices appear anywhere macOS speaks — VoiceOver, Spoken
-Content, and any app using `AVSpeechSynthesizer`. Models are downloaded, verified, and
-stored outside the signed app bundle.
+Give your words a voice. Right on your Mac.
 
-The repository currently ships **Kokoro**: 41 voices across 7 languages, running entirely
-on your Mac.
+Chorus is a native macOS text-to-speech reader with a floating player, selected-text
+reading, and optional CLI completion hooks. Use the voices already on your Mac, or add
+**Kokoro** for 41 on-device neural voices across 7 languages.
+
+[Getting started](#getting-started) · [Reader guide](Documentation/Reader.md) ·
+[Build guide](Documentation/Building.md) · [Releases](https://github.com/PradyumnaKrishna/chorus/releases)
+
+## Features
+
+- Paste text, choose a voice, adjust speed, and listen.
+- Control playback from the floating player or the Chorus soundwave menu-bar icon.
+- Read selected text in compatible apps with optional Accessibility permission.
+- Connect CLI completion hooks from the Integrations page.
+- Install, repair, or remove Kokoro's model through its independent companion app.
+
+macOS voices support word highlighting. Kokoro uses the compact player until reliable
+word timing is available. Kokoro speech synthesis runs locally after the initial model download.
+
+## Getting started
+
+| App | Purpose | Requirements |
+| --- | --- | --- |
+| **Chorus** | Text reader and playback controls | macOS 14+, Apple Silicon or Intel |
+| **Chorus Kokoro** | Optional neural voices and model maintenance | macOS 14+, Apple Silicon |
+
+1. Obtain the apps from [Releases](https://github.com/PradyumnaKrishna/chorus/releases)
+   when available, or [build from source](Documentation/Building.md).
+2. Place `Chorus.app` in `~/Applications`, open it, and try a macOS voice.
+3. For Kokoro, also place `Chorus Kokoro.app` in `~/Applications`. Open it and choose
+   **Install** to download and verify its approximately 86 MB model.
+4. Return to Chorus → **Voice apps**, choose **Refresh voices**, then select a Kokoro voice
+   in **Text to speech**.
+
+Installation is per user. Models live outside the app bundle in the companion's App Group
+container. Chorus opens the installed companion; it does not download apps or install models.
+
+> Unsigned release builds are not notarized and may be blocked by macOS. Kokoro requires
+> signing for usable system voice registration; its unsigned build is a development artifact,
+> not a ready-to-use system voice installation. See [Signing](Documentation/Building.md#signing).
+
+Closing the reader hides its Dock icon while the menu-bar controls remain available.
+Choose **Open Chorus** from the soundwave menu to return, or **Quit Chorus** to exit.
 
 ## Build
 
-Requires macOS 14+ on Apple Silicon, Xcode, and:
+Requires Xcode 26+ (Swift 6.2+) and XcodeGen 2.44+. Kokoro also requires Apple Silicon
+and the native dependency build tools:
 
 ```sh
 brew install xcodegen autoconf automake libtool
 ```
 
 ```sh
-make build-unsigned          # validates the full bundle
-make build                   # signed; required for macOS to register the voices
-make test                    # installer tests and plist validation
-make package VERSION=0.1.0   # signed archive plus checksum in dist/
+make debug APP=Chorus     # reader
+make debug APP=Kokoro     # companion
+make release APP=Chorus   # optimized reader
+make release APP=Kokoro   # optimized companion
+make test                # contracts and plist validation
 ```
 
-`make build` needs an Apple Developer team. Set `CHORUS_TEAM_ID` to your 10-character team
-identifier, or leave it unset and it is read from your keychain — the build stops rather
-than guess if you hold more than one. The app group, and therefore the container your model
-installs into, derives from it, so a build signed with your own team stays entirely within
-your own container.
+Builds are unsigned unless both `DEVELOPMENT_TEAM` and `CODE_SIGN_IDENTITY` are present
+in the environment. There are no signing configuration files. The provider requires
+signing for usable system voice registration.
 
-After installing, enable the voice in System Settings → Accessibility → Spoken Content.
+App versions, build numbers, bundle IDs, and project names live in each app's `Project.yml`.
+Builds create `Chorus.xcodeproj` or `Kokoro.xcodeproj` and use separate `build/<App>/`
+directories. [Full build configuration](Documentation/Building.md).
+
+## Documentation
+
+- [Reader guide](Documentation/Reader.md): setup, playback, selections, and troubleshooting.
+- [Kokoro companion](Providers/Kokoro/README.md): supported voices, installation, and repair.
+- [Building](Documentation/Building.md): commands, outputs, and environment-only signing.
+- [Architecture](Documentation/Architecture.md): reader, companion, and shared-library boundaries.
+- [Adding a provider](Documentation/AddingAProvider.md): create an independent voice app.
+
+For bugs, [open an issue](https://github.com/PradyumnaKrishna/chorus/issues) with your macOS
+version, Mac architecture, app version, affected voice, and reproduction steps. Redact
+private text and credentials from any screenshots or logs.
 
 ## Layout
 
@@ -37,6 +92,7 @@ After installing, enable the voice in System Settings → Accessibility → Spok
 | --- | --- |
 | `Packages/ChorusKit` | `ChorusProviderKit` (manifests, artifact store, downloads) and `ChorusInstallerUI` |
 | `Providers/Kokoro` | Kokoro app, speech extension, engine, and native dependencies |
+| `Hub`, `CLI`, `Shared` | Chorus reader, completion hook, and shared contracts |
 | `BuildSupport` | Shared brand assets and XcodeGen templates |
 | `Documentation` | [Architecture](Documentation/Architecture.md) and [Adding a provider](Documentation/AddingAProvider.md) |
 
@@ -47,6 +103,10 @@ no engine binaries, App Groups, or release schedules.
 
 Shared Chorus code — `Packages/ChorusKit`, `BuildSupport`, and the root build
 configuration — is MIT; see [LICENSE](LICENSE).
+
+The restored reader in `Hub`, `CLI`, `Shared`, and `Tests/Hub` retains the
+GPL-3.0-or-later licensing declared on `old-main`. The reader bundles
+[GPL-3.0](LICENSES/GPL-3.0.txt).
 
 `Providers/Kokoro` and the distributed **Chorus Kokoro** application are
 **GPL-3.0-or-later**, because the speech extension statically links espeak-ng. MIT code may

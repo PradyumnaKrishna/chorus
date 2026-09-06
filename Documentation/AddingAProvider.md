@@ -1,8 +1,22 @@
 # Adding a provider
 
-Create `Providers/<Name>`. Nothing outside that directory needs editing — the `Makefile`
-derives everything from `PROVIDER`, and `project.yml` includes the fragment through
-`${CHORUS_PROVIDER}`.
+Create `Providers/<Name>/Project.yml` with `name: <Name>` and an explicitly declared
+scheme named `<Name>`. `make debug APP=<Name>` selects it without changes to the shared
+Makefile or a central provider table. The generated project is `<Name>.xcodeproj` and
+build outputs live under `build/<Name>/`.
+
+Use `Providers/Kokoro/Project.yml` as an example. Paths are repository-relative because
+generation supplies the repository as `--project-root`. Include
+`BuildSupport/XcodeGen/Base.yml` with `relativePaths: false`. The selected scheme's first
+build target must be the containing application; its dependencies build the extension.
+
+Declare `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` under `settings.base`,
+inherited by the app and extension.
+Declare the app's product name and bundle IDs
+in YAML; these do not need matching Makefile variables. The scheme must provide
+Debug and Release configurations through the shared base.
+
+## Layout
 
 ```text
 Providers/<Name>/
@@ -12,29 +26,21 @@ Providers/<Name>/
 ├── App/            entry point, Info.plist, Entitlements.plist, Resources/Provider.json
 ├── Extension/      AVSpeechSynthesisProviderAudioUnit
 ├── Engine/         synthesis
-└── BuildSupport/   dependency preparation
+└── BuildSupport/   bootstrap.sh, dependencies, optional test-engine.sh
 ```
-
-That derivation fixes three names:
-
-| Convention | Becomes |
-| --- | --- |
-| `Providers/<Name>` | the value of `PROVIDER` |
-| `Chorus<Name>` | scheme and container target |
-| `Chorus <Name>` | `PRODUCT_NAME`, and so the `.app` and archive names |
 
 ## Requirements
 
-- The app entry point loads `Provider.json` and calls `InstallerApplication.run`. Do not
-  fork the installer for branding or copy — those come from the manifest.
-- Set `CHORUS_GROUP_NAME` on both targets to the same value. Never write a team identifier;
-  both entitlements files and both `Info.plist` files use `$(CHORUS_APP_GROUP)`.
-- Declare every downloadable file in `Provider.json` with an HTTPS source, exact byte count,
-  and SHA-256. Installation succeeds only when the complete set verifies.
-- Pin external dependencies by version *and* checksum in the provider's `BuildSupport`.
+- Load `Provider.json` and call `InstallerApplication.run`; shared installer branding
+  and copy come from the descriptor.
+- Set the same `CHORUS_GROUP_NAME` on the app and extension. Both entitlements and
+  Info.plists use `$(CHORUS_APP_GROUP)`. Keep team identifiers out of committed configuration.
+- Declare each downloadable model artifact with an HTTPS source, exact byte count,
+  SHA-256, and relative destination. Tokenizers, voices, and native code stay bundled.
+- Pin dependency versions and checksums in provider-owned preparation scripts.
+- Use `.artifacts/<Name>/Brand/AppIcon.xcassets` for the generated shared-brand icon.
 - Add the provider and its license to `THIRD_PARTY_NOTICES.md`.
 
-## Before submitting
-
-Build unsigned, run `make test`, run `make render` if you touched the installer, and
-validate a signed app and extension on a destination Mac.
+Before submitting, run `make debug APP=<Name>`, `make test`, and
+`make render APP=<Name>` for installer changes. Verify signed voice registration on a
+destination Mac. See [Building](Building.md) for optional signing configuration.

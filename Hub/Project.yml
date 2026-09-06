@@ -1,0 +1,57 @@
+name: Chorus
+include:
+  - path: BuildSupport/XcodeGen/Base.yml
+    relativePaths: false
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+schemes:
+  Chorus:
+    build:
+      targets:
+        Chorus: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+targets:
+  Chorus:
+    type: application
+    platform: macOS
+    sources:
+      - path: Hub
+        excludes: [Info.plist, Project.yml]
+      - Shared
+      - path: LICENSES/GPL-3.0.txt
+        buildPhase: resources
+      - path: BuildSupport/Brand/ChorusSoundwave.png
+        buildPhase: resources
+      - path: BuildSupport/Brand/ChorusSoundwaveDark.png
+        buildPhase: resources
+      - path: .artifacts/Chorus/Brand/AppIcon.xcassets
+    settings:
+      base:
+        INFOPLIST_FILE: Hub/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: in.onpy.Chorus
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies:
+      - target: ChorusCLI
+        embed: false
+    postBuildScripts:
+      - name: Bundle completion hook
+        script: |
+          mkdir -p "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers"
+          cp "$BUILT_PRODUCTS_DIR/chorus-hook" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/chorus-hook"
+        inputFiles: ["$(BUILT_PRODUCTS_DIR)/chorus-hook"]
+        outputFiles: ["$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/chorus-hook"]
+  ChorusCLI:
+    type: tool
+    platform: macOS
+    sources:
+      - CLI
+      - Shared/CompletionEvent.swift
+    settings:
+      base:
+        PRODUCT_NAME: chorus-hook
+        GENERATE_INFOPLIST_FILE: YES
