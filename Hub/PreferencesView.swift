@@ -31,12 +31,12 @@ struct PreferencesView: View {
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Divider()
                 HStack {
-                    Text("Global player shortcut")
+                    Text("Global shortcuts")
                     Spacer()
-                    Toggle("Global player shortcut", isOn: $overlay.shortcutEnabled).labelsHidden()
-                        .toggleStyle(.switch).controlSize(.small).disabled(overlay.style == .disabled)
+                    Toggle("Global shortcuts", isOn: $overlay.shortcutEnabled).labelsHidden()
+                        .toggleStyle(.switch).controlSize(.small)
                 }
-                Text(overlay.shortcutUnavailable ? "Shortcut unavailable. Another app may be using it. Use the Chorus menu to show the player." : "⌃⌥⌘P shows or hides the player from any app.")
+                Text(overlay.shortcutUnavailable ? "A shortcut is unavailable because another app may be using it." : "⌃⌥⌘P shows or hides the player. ⌘. stops speech and clears the queue.")
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }.padding(16).background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
             VStack(alignment: .leading, spacing: 8) {

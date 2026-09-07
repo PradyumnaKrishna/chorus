@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import Combine
 import SwiftUI
 
@@ -37,9 +38,10 @@ final class PlaybackOverlay: ObservableObject {
     private var voiceSubscription: AnyCancellable?
     private weak var player: SpeechPlayer?
     private var selectionReader: SelectionReader?
-    private var previousState = SpeechPlayer.State.idle
+    private var playbackState = SpeechPlayer.State.idle
     private var escapeMonitor: Any?
     private var shortcut: PlayerShortcut?
+    private var stopShortcut: PlayerShortcut?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -58,9 +60,14 @@ final class PlaybackOverlay: ObservableObject {
         self.player = player
         self.selectionReader = selectionReader
         voiceSubscription = player.$selection.receive(on: RunLoop.main).sink { [weak self] _ in self?.resize() }
-        shortcut = PlayerShortcut { [weak self, weak player, weak inbox] in
+        shortcut = PlayerShortcut(keyCode: UInt32(kVK_ANSI_P),
+                                  modifiers: UInt32(cmdKey | optionKey | controlKey), id: 1) { [weak self, weak player, weak inbox] in
             guard let self, let player, let inbox else { return }
             self.toggle(player: player, inbox: inbox)
+        }
+        stopShortcut = PlayerShortcut(keyCode: UInt32(kVK_ANSI_Period), modifiers: UInt32(cmdKey), id: 2) { [weak player, weak inbox] in
+            inbox?.clear()
+            player?.stop()
         }
         configureShortcut()
         escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -69,8 +76,10 @@ final class PlaybackOverlay: ObservableObject {
         }
         subscription = player.$state.removeDuplicates().sink { [weak self, weak player, weak inbox] state in
             guard let self, let player, let inbox else { return }
-            let began = self.previousState == .idle && state != .idle
-            self.previousState = state
+            let began = self.playbackState == .idle && state != .idle
+            // @Published emits before player.state changes; retain the incoming state.
+            self.playbackState = state
+            self.configureShortcut()
             if state == .idle {
                 if self.autoHide && self.selectionReader?.enabled != true { self.hide() }
             } else if began {
@@ -80,10 +89,23 @@ final class PlaybackOverlay: ObservableObject {
     }
 
     private func configureShortcut() {
-        guard let shortcut else { return }
+        guard let shortcut, let stopShortcut else { return }
         shortcutUnavailable = false
-        if shortcutEnabled && style != .disabled { shortcutUnavailable = !shortcut.register() }
-        else { shortcut.unregister() }
+        if shortcutEnabled {
+            let playerRegistered = style == .disabled || shortcut.register()
+            if style == .disabled { shortcut.unregister() }
+            let stopRegistered: Bool
+            if playbackState == .idle {
+                stopShortcut.unregister()
+                stopRegistered = true
+            } else {
+                stopRegistered = stopShortcut.register()
+            }
+            shortcutUnavailable = !playerRegistered || !stopRegistered
+        } else {
+            shortcut.unregister()
+            stopShortcut.unregister()
+        }
     }
 
     isolated deinit {

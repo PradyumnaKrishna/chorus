@@ -42,9 +42,12 @@ availability are displayed separately; neither is presented as proof of model in
   available. Choose **Open Chorus** or **Settings…** in that menu to restore the window
   and Dock icon. Use **Quit Chorus** to exit the app.
 - Paste text, choose a voice, and read, pause, resume, or stop. Stop clears the completion queue.
+- While reading, macOS Now Playing and the keyboard media key can pause and resume speech,
+  including when the main window is closed. Finishing or stopping clears Now Playing.
 - Choose Compact, Full, or Disabled floating player in Settings. Kokoro uses Compact
   because its estimated timing is unsuitable for word highlighting. macOS voices support it.
-- Control–Option–Command–P toggles the floating player. Hide preserves playback.
+- Control–Option–Command–P toggles the floating player. Command–period stops speech and
+  clears the queue globally. Hide preserves playback.
 - Selection reading is opt-in on the floating player and requires Accessibility permission.
   It resets at launch; hiding the player disables it. Clipboard and full-document reads
   are not used for selection monitoring.
