@@ -1,10 +1,13 @@
 import AVFoundation
+import MediaPlayer
 import SwiftUI
 
 @MainActor
 final class SpeechPlayer: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     enum State { case idle, speaking, paused }
-    @Published private(set) var state: State = .idle
+    @Published private(set) var state: State = .idle {
+        didSet { updateMediaControls() }
+    }
     @Published private(set) var voices: [AVSpeechSynthesisVoice] = []
     @Published private(set) var spokenText = ""
     @Published private(set) var wordRange: NSRange?
@@ -17,6 +20,7 @@ final class SpeechPlayer: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     }
     private let synthesizer = AVSpeechSynthesizer()
     private var current: AVSpeechUtterance?
+    private var remoteTargets: [(MPRemoteCommand, Any)] = []
     // Only Apple's built-in voices provide word callbacks we can trust for highlighting.
     @Published private(set) var playbackCapabilities = VoiceCapabilities.basic
     var wordHighlighting: Bool { playbackCapabilities.wordHighlighting }
@@ -25,6 +29,46 @@ final class SpeechPlayer: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     override init() {
         super.init()
         synthesizer.delegate = self
+        let commands = MPRemoteCommandCenter.shared()
+        for command in [commands.playCommand, commands.pauseCommand, commands.togglePlayPauseCommand] {
+            let target = command.addTarget { [weak self] event in
+                // MediaPlayer can deliver commands off the main thread; speech state belongs to the main actor.
+                let action = event.command == commands.playCommand ? State.speaking
+                    : event.command == commands.pauseCommand ? State.paused : nil
+                Task { @MainActor [weak self] in
+                    guard let self, self.state != .idle else { return }
+                    if action == nil || self.state != action { self.togglePause() }
+                }
+                return .success
+            }
+            remoteTargets.append((command, target))
+        }
+        updateMediaControls()
+    }
+
+    isolated deinit {
+        for (command, target) in remoteTargets { command.removeTarget(target) }
+    }
+
+    private func updateMediaControls() {
+        let commands = MPRemoteCommandCenter.shared()
+        commands.playCommand.isEnabled = state == .paused
+        commands.pauseCommand.isEnabled = state == .speaking
+        commands.togglePlayPauseCommand.isEnabled = state != .idle
+        let center = MPNowPlayingInfoCenter.default()
+        if state == .idle {
+            center.playbackState = .stopped
+            center.nowPlayingInfo = nil
+        } else {
+            // Speech has no reliable duration or seek position, so expose transport controls only.
+            center.nowPlayingInfo = [
+                MPMediaItemPropertyTitle: "Reading aloud",
+                MPMediaItemPropertyArtist: "Chorus",
+                MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
+                MPNowPlayingInfoPropertyPlaybackRate: state == .speaking ? 1.0 : 0.0
+            ]
+            center.playbackState = state == .speaking ? .playing : .paused
+        }
     }
 
     @Published private(set) var refreshing = false
