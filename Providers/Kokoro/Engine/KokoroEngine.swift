@@ -8,6 +8,8 @@ final class KokoroEngine {
 
     /// The model's positional limit, minus the two padding tokens.
     private static let maxTokens = 509
+    private static let openingChunkCharacters = 80
+    private static let continuationChunkCharacters = 120
 
     private let model: OpaquePointer
     private let voicesDirectory: URL
@@ -41,7 +43,8 @@ final class KokoroEngine {
         try Phonemizer.shared.prepare(dataDirectory: resources, tokenizer: tokenizer)
 
         var error = [CChar](repeating: 0, count: 512)
-        let threads = Int32(max(1, ProcessInfo.processInfo.activeProcessorCount - 1))
+        // More than eight workers increased inference latency in local benchmarks.
+        let threads = Int32(min(8, max(1, ProcessInfo.processInfo.activeProcessorCount - 1)))
         guard let handle = kokoro_ort_create(model.path, threads,
                                              useCoreML ? KOKORO_ORT_BACKEND_COREML : KOKORO_ORT_BACKEND_CPU,
                                              &error, error.count) else {
@@ -62,10 +65,9 @@ final class KokoroEngine {
     /// `chunkRanges(of:)` first so audio starts playing sooner.
     ///
     /// A span that still exceeds the model's positional limit is synthesized in
-    /// several passes rather than clipped. `chunkRanges` budgets *characters*, on
-    /// the assumption of roughly three per phoneme token, which does not hold for
-    /// every script this provider ships; clipping here dropped the tail of the
-    /// span silently, so speech simply stopped mid-sentence.
+    /// several passes rather than clipped. `chunkRanges` budgets *characters* for
+    /// latency; normalization and phonemization can expand them beyond the token
+    /// cap, so the actual token count must still be checked here.
     func synthesize(_ text: String, voice: KokoroVoice, speed: Float = 1.0) throws -> [Float] {
         let ids = Phonemizer.shared.tokenize(text, language: voice.language)
         guard !ids.isEmpty else { return [] }
@@ -135,15 +137,15 @@ final class KokoroEngine {
         return Array(table[start ..< start + dimension])
     }
 
-    /// Splits text at sentence boundaries into spans that stay under the
-    /// model's token limit, so playback can start before the whole passage has
-    /// been synthesized.
+    /// Splits at sentence boundaries (or spaces in long sentences), publishing
+    /// a short opening span so playback can start before the whole passage has
+    /// been synthesized. `synthesize` enforces the actual phoneme-token limit.
     ///
     /// Ranges are character offsets into `text` rather than substrings, because
     /// callers need them to map audio back onto the original text.
     func chunkRanges(of text: String) -> [Range<Int>] {
-        // Roughly three characters per phoneme token; stays well under the cap.
-        let budget = 300
+        // Keep the first two chunks short so the second can be ready before the
+        // first finishes playing. Grow only after playback has a head start.
         let characters = Array(text)
 
         var sentences: [Range<Int>] = []
@@ -158,9 +160,11 @@ final class KokoroEngine {
         var current: Range<Int>?
 
         for sentence in sentences {
+            let budget = result.count < 2 ? Self.openingChunkCharacters : Self.continuationChunkCharacters
             if sentence.count > budget {
                 if let open = current { result.append(open); current = nil }
-                result.append(contentsOf: split(sentence, in: characters, budget: budget))
+                result.append(contentsOf: split(sentence, in: characters,
+                    priorChunkCount: result.count))
             } else if let open = current, sentence.upperBound - open.lowerBound > budget {
                 result.append(open)
                 current = sentence
@@ -178,18 +182,26 @@ final class KokoroEngine {
         }
     }
 
-    /// Last-resort split, on whitespace, for a sentence with no usable boundary.
-    private func split(_ range: Range<Int>, in characters: [Character], budget: Int) -> [Range<Int>] {
+    /// Prefer a nearby clause boundary over an arbitrary word break, so a chunk
+    /// does not unnecessarily end with a dangling article or preposition.
+    private func split(_ range: Range<Int>, in characters: [Character], priorChunkCount: Int) -> [Range<Int>] {
         var pieces: [Range<Int>] = []
         var start = range.lowerBound
         var lastSpace: Int?
+        var lastClause: Int?
 
         for index in range {
-            if characters[index] == " " { lastSpace = index }
+            if characters[index] == " " {
+                lastSpace = index
+                if index > start, ",;:".contains(characters[index - 1]) { lastClause = index }
+            }
+            let budget = priorChunkCount + pieces.count < 2 ? Self.openingChunkCharacters : Self.continuationChunkCharacters
             if index - start >= budget, let space = lastSpace, space > start {
-                pieces.append(start..<space)
-                start = space + 1
+                let boundary = lastClause.flatMap { $0 - start >= budget / 3 ? $0 : nil } ?? space
+                pieces.append(start..<boundary)
+                start = boundary + 1
                 lastSpace = nil
+                lastClause = nil
             }
         }
         if start < range.upperBound { pieces.append(start..<range.upperBound) }

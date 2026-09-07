@@ -42,6 +42,13 @@ enum TextNormalizer {
         text = regexReplace(text, #"\b(y)eah?\b"#, with: "$1e'a", options: [.caseInsensitive])
 
         // 6. Numbers, times, years and currency.
+        // Protect dotted versions before decimal matching consumes adjacent parts
+        // (0.1.1 used to become "0 point 1.1", losing a spoken separator).
+        text = regexReplaceMap(text, #"\b[vV]?\d+(?:\.\d+){2,}\b"#) { version in
+            let prefixed = version.first == "v" || version.first == "V"
+            let number = prefixed ? String(version.dropFirst()) : version
+            return (prefixed ? "version " : "") + number.components(separatedBy: ".").joined(separator: " point ")
+        }
         text = regexReplaceMap(text, #"\d*\.\d+|\b\d{4}s?\b|(?<!:)\b(?:[1-9]|1[0-2]):[0-5]\d\b(?!:)"#, splitNumber)
         text = regexReplace(text, #"(?<=\d),(?=\d)"#, with: "")
         text = regexReplaceMap(text,

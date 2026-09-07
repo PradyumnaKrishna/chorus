@@ -162,12 +162,14 @@ public final class KokoroAudioUnit: AVSpeechSynthesisProviderAudioUnit, @uncheck
         let characters = Array(ssml.text)
         var frames = 0
 
-        for range in engine.chunkRanges(of: ssml.text) {
+        let ranges = engine.chunkRanges(of: ssml.text)
+        for (index, range) in ranges.enumerated() {
             guard isCurrent(generation) else { return }
 
             let text = String(characters[range])
             do {
-                let audio = try engine.synthesize(text, voice: voice, speed: ssml.rate)
+                var audio = try engine.synthesize(text, voice: voice, speed: ssml.rate)
+                KokoroAudio.trimPadding(&audio, chunkText: text, hasFollowingChunk: index + 1 < ranges.count)
                 guard isCurrent(generation) else { return }
                 guard !audio.isEmpty else { continue }
 
