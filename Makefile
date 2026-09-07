@@ -30,7 +30,7 @@ bootstrap: validate
 	@if [[ -f "$(APP_DIR)/BuildSupport/bootstrap.sh" ]]; then bash "$(APP_DIR)/BuildSupport/bootstrap.sh"; fi
 
 icon: validate
-	@bash BuildSupport/Brand/build-icon.sh "$(APP)" "$(APP)"
+	@bash BuildSupport/Brand/build-icon.sh "$(APP)" "$(if $(filter Chorus,$(APP)),,$(APP))"
 
 generate: bootstrap icon
 	xcodegen generate --spec "$(APP_DIR)/Project.yml" --project-root . --project . --quiet

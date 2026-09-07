@@ -57,25 +57,29 @@ try NSColor(hex: arguments[3]).setFill()
 tile.fill()
 
 NSGraphicsContext.current?.imageInterpolation = .high
-mark.draw(
-    in: NSRect(x: 145, y: 190, width: 734, height: 690),
-    from: .zero,
-    operation: .sourceOver,
-    fraction: 1
-)
 
-let paragraph = NSMutableParagraphStyle()
-paragraph.alignment = .center
-let attributes: [NSAttributedString.Key: Any] = [
-    .font: NSFont.systemFont(ofSize: 72, weight: .bold),
-    .foregroundColor: try NSColor(hex: arguments[4]),
-    .kern: 9,
-    .paragraphStyle: paragraph
-]
-NSString(string: arguments[5].uppercased()).draw(
-    in: NSRect(x: 110, y: 106, width: 804, height: 92),
-    withAttributes: attributes
-)
+// A provider icon carries its label; the base Chorus icon is the mark alone and
+// centres a larger soundwave in the space the label would otherwise occupy.
+let label = arguments[5].uppercased()
+let markFrame = label.isEmpty
+    ? NSRect(x: 117, y: 140, width: 790, height: 743)
+    : NSRect(x: 222, y: 335, width: 580, height: 545)
+mark.draw(in: markFrame, from: .zero, operation: .sourceOver, fraction: 1)
+
+if !label.isEmpty {
+    let paragraph = NSMutableParagraphStyle()
+    paragraph.alignment = .center
+    let attributes: [NSAttributedString.Key: Any] = [
+        .font: NSFont.systemFont(ofSize: 120, weight: .bold),
+        .foregroundColor: try NSColor(hex: arguments[4]),
+        .kern: 12,
+        .paragraphStyle: paragraph
+    ]
+    NSString(string: label).draw(
+        in: NSRect(x: 90, y: 150, width: 844, height: 150),
+        withAttributes: attributes
+    )
+}
 image.unlockFocus()
 
 guard let tiff = image.tiffRepresentation,
