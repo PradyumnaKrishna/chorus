@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 
 // Hooks must never block a harness turn: no speech, transcript reads, or network work here.
@@ -21,15 +20,7 @@ do {
         let file = directory.appendingPathComponent(event.id + ".json")
         try JSONEncoder().encode(event).write(to: file, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
-        // The executable is shipped inside Chorus.app/Contents/Helpers.
-        let app = URL(fileURLWithPath: arguments[0]).resolvingSymlinksInPath()
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        if app.pathExtension == "app" {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-            process.arguments = ["-g", app.path]
-            try process.run()
-        }
+        // The running menu-bar app polls this inbox; delivery must not launch or reopen it.
     }
 } catch {
     FileHandle.standardError.write(Data("Chorus: \(error.localizedDescription)\n".utf8))
