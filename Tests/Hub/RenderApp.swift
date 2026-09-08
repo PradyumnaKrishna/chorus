@@ -41,7 +41,7 @@ struct RenderApp {
         for step in 0..<3 {
             try capture(OnboardingView(initialStep: step), name: step == 0 ? "onboarding" : "onboarding-\(step + 1)", size: NSSize(width: 490, height: 380))
         }
-        try capture(IntegrationSetupView(source: .claude), name: "configuration", size: NSSize(width: 550, height: 520))
+        try capture(IntegrationSetupView(source: .claude, error: nil), name: "configuration", size: NSSize(width: 550, height: 520))
         let overlays = VStack(spacing: 20) {
             PlaybackOverlayView(player: SpeechPlayer(), inbox: CompletionInbox(), selectionReader: SelectionReader(defaults: defaults), dismiss: {})
             PlaybackOverlayView(player: SpeechPlayer(), inbox: CompletionInbox(), selectionReader: SelectionReader(defaults: defaults), captions: true, dismiss: {})

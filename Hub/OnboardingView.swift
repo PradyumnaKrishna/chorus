@@ -12,7 +12,7 @@ struct OnboardingView: View {
     private let descriptions = [
         "Paste text and choose a voice. Use the voices already on your Mac, or add Chorus Kokoro from Voice apps.",
         "The floating player keeps controls close. Choose Compact, Full, or Disabled in Settings, and hide it without stopping your reading.",
-        "Connect Claude Code or Codex to hear completed answers. Manual setup is available in Integrations whenever you're ready."
+        "Connect Claude Code or Codex to hear completed answers. Chorus can configure integrations after your confirmation."
     ]
 
     init(initialStep: Int = 0) {

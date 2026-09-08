@@ -3,9 +3,22 @@
 ## Product boundary
 
 The Chorus reader (`Hub`) uses macOS speech APIs and a completion hook (`CLI`) sharing
-contracts in `Shared`. It opens an installed companion for model maintenance, but does
-not embed providers or access their model containers. Companion downloads and remote
-update feeds remain deferred.
+completion contracts through `ChorusIntegrationKit`. It opens an installed companion
+for model maintenance, but does not embed providers or access their model containers.
+Companion downloads and remote update feeds remain deferred.
+
+CLI integrations use main-thread `Stop` hooks and reject subagent lifecycle events. The
+Codex parser retains legacy `notify` compatibility for existing installations. The reader
+merges its identified command into user-level JSON settings once; unsupported settings
+fall back to manual setup. Before a completion enters the local
+inbox, `SpeechText` parses GitHub-flavored Markdown and renders it into provider-independent
+plain text: prose and link labels remain, UI directives are removed, tables become
+comma-delimited rows, and fenced code is announced but not read verbatim.
+The reader continues to use `AVSpeechUtterance(string:)`; assistant content is never
+interpreted as SSML. Manual reader text and Accessibility selections remain literal.
+
+`ChorusIntegrationKit` is a separate Swift package target so the hook and reader consume
+one tested contract. Its Swift Markdown dependency is pinned in `Package.resolved`.
 
 Each app's `Project.yml` declares its own project, scheme, version, and build number.
 `Chorus.xcodeproj` and `Kokoro.xcodeproj` are generated independently, with outputs under

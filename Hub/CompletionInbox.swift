@@ -68,17 +68,4 @@ final class CompletionInbox: ObservableObject {
         } catch { status = "Could not read completions: \(error.localizedDescription)" }
     }
 
-    static func configuration(for source: Harness) -> String {
-        let executable = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/chorus-hook").path
-        switch source {
-        case .codex:
-            // JSON basic strings are also valid TOML basic strings for filesystem paths.
-            let quoted = String(data: try! JSONEncoder().encode(executable), encoding: .utf8)!
-            return "notify = [\(quoted), \"codex\"]"
-        case .claude:
-            let command = "'" + executable.replacingOccurrences(of: "'", with: "'\\''") + "' claude"
-            let value: [String: Any] = ["hooks": ["Stop": [["hooks": [["type": "command", "command": command, "async": true]]]]]]
-            return String(data: try! JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]), encoding: .utf8)!
-        }
-    }
 }

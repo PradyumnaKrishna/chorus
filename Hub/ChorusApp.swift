@@ -84,9 +84,6 @@ private struct MenuControls: View {
             .disabled(player.state == .idle).keyboardShortcut(.space, modifiers: [.command, .shift])
         Button("Stop and clear queue") { inbox.clear(); player.stop() }.keyboardShortcut(".")
         Divider()
-        Toggle("Read Claude Code", isOn: $inbox.claudeEnabled).keyboardShortcut("1", modifiers: [.command, .shift])
-        Toggle("Read Codex", isOn: $inbox.codexEnabled).keyboardShortcut("2", modifiers: [.command, .shift])
-        Divider()
         Button("Quit Chorus") { NSApp.terminate(nil) }.keyboardShortcut("q")
     }
 }
@@ -105,10 +102,10 @@ struct ChorusView: View {
     @ObservedObject var inbox: CompletionInbox
     @ObservedObject var overlay: PlaybackOverlay
     @ObservedObject var selectionReader: SelectionReader
+    @StateObject private var integrationController: IntegrationController
     @State private var page: Page = .reader
     @AppStorage("setupComplete") private var setupComplete = false
     @State private var showOnboarding = false
-    @State private var configuring: Harness?
     @AppStorage("readerText") private var text = "Welcome to Chorus. Give your words a voice.\n\nPaste something you want to listen to, choose a voice, and press play. Everything is spoken right here on your Mac."
 
     init(player: SpeechPlayer, companion: CompanionApp, inbox: CompletionInbox,
@@ -118,6 +115,7 @@ struct ChorusView: View {
         self.inbox = inbox
         self.overlay = overlay
         self.selectionReader = selectionReader
+        _integrationController = StateObject(wrappedValue: IntegrationController(inbox: inbox))
         _page = State(initialValue: initialPage)
     }
 
@@ -173,13 +171,26 @@ struct ChorusView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .chorusShowSettings)) { _ in page = .settings }
         .onReceive(NotificationCenter.default.publisher(for: .chorusShowOnboarding)) { _ in showOnboarding = true }
-        .sheet(item: $configuring) { source in
-            IntegrationSetupView(source: source)
+        .sheet(item: $integrationController.manualSetup) { setup in
+            IntegrationSetupView(source: setup.source, error: setup.error)
+        }
+        .alert("Setup required", isPresented: Binding(
+            get: { integrationController.setupRequest != nil },
+            set: { if !$0 { integrationController.setupRequest = nil } }
+        ), presenting: integrationController.setupRequest) { source in
+            Button("Set Up") { integrationController.confirmSetup(for: source) }
+            Button("Cancel", role: .cancel) {}
+        } message: { source in
+            Text("Chorus needs to add its response hook to \(source.title). Existing settings and hooks will be preserved.")
         }
         .tint(.accentColor)
-        .onAppear { player.refresh(); if !setupComplete { showOnboarding = true } }
+        .onAppear {
+            player.refresh()
+            integrationController.refresh()
+            if !setupComplete { showOnboarding = true }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            player.refresh(); companion.refresh()
+            player.refresh(); companion.refresh(); integrationController.refresh()
         }
     }
 
@@ -318,17 +329,23 @@ struct ChorusView: View {
                     HStack {
                         Label(source.title, systemImage: "terminal").font(.headline)
                         Spacer()
-                        Toggle("Read responses", isOn: source == .claude ? $inbox.claudeEnabled : $inbox.codexEnabled)
+                        Toggle("Read responses", isOn: integrationBinding(for: source))
                             .labelsHidden().toggleStyle(.switch).accessibilityLabel("Read \(source.title) responses")
                     }
                     HStack {
-                        Text(inbox.enabled(source) ? "Reading enabled" : "Reading off").font(.caption).foregroundStyle(.secondary)
+                        Label(integrationController.configured.contains(source) ? "Configured" : "Setup required",
+                              systemImage: integrationController.configured.contains(source) ? "checkmark.circle.fill" : "exclamationmark.circle")
+                            .font(.caption)
+                            .foregroundStyle(integrationController.configured.contains(source) ? .green : .secondary)
                         Spacer()
-                        Button("Configuration…") { configuring = source }
+                        if !integrationController.configured.contains(source) {
+                            Button("Manual setup…") { integrationController.showManualSetup(for: source) }
+                                .buttonStyle(.link)
+                        }
                     }
                 }.padding(18).background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
             }
-            Text("Manual setup is required once. Enabling listening does not change your harness configuration.")
+            Text("Setup happens once. Turning an integration off pauses reading without changing its configuration.")
                 .font(.caption).foregroundStyle(.secondary)
             Spacer(minLength: 0)
             HStack {
@@ -336,6 +353,12 @@ struct ChorusView: View {
                 Spacer()
                 Button("Clear queue", action: inbox.clear)
             }
+        }
+    }
+
+    private func integrationBinding(for source: Harness) -> Binding<Bool> {
+        Binding(get: { integrationController.isListening(to: source) }) { enabled in
+            integrationController.request(enabled, for: source)
         }
     }
 

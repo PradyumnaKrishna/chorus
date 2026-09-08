@@ -8,10 +8,11 @@ do {
         throw CompletionEvent.InputError.invalid
     }
     let data: Data
-    if source == .codex {
-        guard arguments.count == 3 else { throw CompletionEvent.InputError.invalid }
+    if source == .codex, arguments.count == 3 {
+        // Legacy Codex `notify` passes the payload as the final argument.
         data = Data(arguments[2].utf8)
     } else {
+        guard arguments.count == 2 else { throw CompletionEvent.InputError.invalid }
         data = FileHandle.standardInput.readData(ofLength: CompletionEvent.maximumBytes + 1)
     }
     if let event = try CompletionEvent.parse(data, source: source) {

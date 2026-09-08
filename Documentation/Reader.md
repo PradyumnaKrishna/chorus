@@ -51,9 +51,11 @@ availability are displayed separately; neither is presented as proof of model in
 - Selection reading is opt-in on the floating player and requires Accessibility permission.
   It resets at launch; hiding the player disables it. Clipboard and full-document reads
   are not used for selection monitoring.
-- Integrations provide manual hook configuration. Move Chorus to its permanent location
-  before copying paths. Merge snippets with existing configuration; the app does not edit it.
-  Listening defaults off. Only final completion text is queued locally.
+- Integrations install their Chorus hook once after confirmation while preserving unrelated
+  settings and hooks. Turning listening off leaves that configuration in place. Manual instructions
+  remain available until setup is detected. Only final completion text is queued locally. Markdown formatting,
+  link destinations, harness UI directives, and fenced code are removed before speech.
+  Custom `CODEX_HOME` and `CLAUDE_CONFIG_DIR` locations are respected when available to Chorus.
 
 `make test` checks completion input filtering, Unicode highlighting, voice classification,
 and selection debounce. Native playback, global shortcuts, Accessibility permissions, and
@@ -61,13 +63,14 @@ provider registration should also be exercised on a destination Mac.
 
 ## CLI integrations
 
-Open **Integrations** and choose the CLI you want to connect. Keep Chorus in its permanent
-location before copying the generated configuration: it contains the bundled helper's path.
-Merge the snippet with your existing settings, restart the CLI, and enable listening in Chorus.
-These integrations are for CLI sessions, not desktop assistant applications.
+Open **Integrations** and enable the CLI you want to connect. Confirm setup, then restart the
+CLI. Chorus merges its hook into the user-level settings and preserves unrelated configuration.
+These integrations are for CLI sessions, not desktop assistant applications. If automatic
+setup fails, Chorus opens manual instructions with the generated configuration.
 
-Preserve existing hooks. If you already have a notify command, call Chorus from your
-existing wrapper instead of replacing it. Chorus does not edit your CLI configuration.
+Preserve existing hooks when merging the generated JSON. Codex uses its main-thread `Stop`
+hook instead of the broader legacy `notify` callback, so title generation, subagents, and
+other internal completions are not queued.
 
 ## Troubleshooting
 
