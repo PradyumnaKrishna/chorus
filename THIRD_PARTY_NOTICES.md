@@ -1,9 +1,11 @@
 # Third-party notices
 
-Chorus Kokoro incorporates the following components. Each retains its own license.
+Chorus and Chorus Kokoro incorporate the following components. Each retains its own license.
 
 | Component | Use | License | Source |
 | --- | --- | --- | --- |
+| Swift Markdown 0.8.0 | GitHub-flavored Markdown parsing | Apache-2.0 | https://github.com/swiftlang/swift-markdown |
+| swift-cmark 0.8.0 | Parser used by Swift Markdown | BSD-2-Clause and MIT | https://github.com/swiftlang/swift-cmark |
 | espeak-ng | Grapheme-to-phoneme conversion, statically linked | GPL-3.0-or-later | https://github.com/espeak-ng/espeak-ng |
 | ONNX Runtime | Model inference, embedded dylib | MIT | https://github.com/microsoft/onnxruntime |
 | Kokoro-82M ONNX | Downloaded model and bundled voice tensors | Apache-2.0 | https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX |

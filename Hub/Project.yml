@@ -4,8 +4,8 @@ include:
     relativePaths: false
 settings:
   base:
-    MARKETING_VERSION: "0.1.1"
-    CURRENT_PROJECT_VERSION: "2"
+    MARKETING_VERSION: "0.2.0"
+    CURRENT_PROJECT_VERSION: "3"
 schemes:
   Chorus:
     build:
@@ -23,7 +23,9 @@ targets:
       - path: Hub
         excludes: [Info.plist, Project.yml]
       - Shared
-      - path: LICENSES/GPL-3.0.txt
+      - path: THIRD_PARTY_NOTICES.md
+        buildPhase: resources
+      - path: Providers/Kokoro/LICENSE
         buildPhase: resources
       - path: BuildSupport/Brand/ChorusSoundwave.png
         buildPhase: resources

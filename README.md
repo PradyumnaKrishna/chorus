@@ -105,14 +105,13 @@ Shared Chorus code — `Packages/ChorusKit`, `BuildSupport`, and the root build
 configuration — is MIT; see [LICENSE](LICENSE).
 
 The restored reader in `Hub`, `CLI`, `Shared`, and `Tests/Hub` retains the
-GPL-3.0-or-later licensing declared on `old-main`. The reader bundles
-[GPL-3.0](LICENSES/GPL-3.0.txt).
+GPL-3.0-or-later licensing declared on `old-main`. It uses and bundles the full GPL text at
+[Providers/Kokoro/LICENSE](Providers/Kokoro/LICENSE); the path is shared to avoid a duplicate copy.
 
 `Providers/Kokoro` and the distributed **Chorus Kokoro** application are
 **GPL-3.0-or-later**, because the speech extension statically links espeak-ng. MIT code may
 be combined into it; the resulting application must satisfy GPL-3.0-or-later. Its full
-license text is at [Providers/Kokoro/LICENSE](Providers/Kokoro/LICENSE) and ships inside
-the app.
+license text ships inside the app.
 
 This also means Chorus Kokoro cannot go to the Mac App Store, whose terms conflict with
 GPL-3.0. Store distribution would require replacing espeak-ng.

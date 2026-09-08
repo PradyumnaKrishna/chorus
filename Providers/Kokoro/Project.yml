@@ -27,10 +27,6 @@ targets:
           - Entitlements.plist
       - path: Providers/Kokoro/LICENSE
         buildPhase: resources
-      - path: LICENSES/Apache-2.0.txt
-        buildPhase: resources
-      - path: LICENSES/ONNX-Runtime-MIT.txt
-        buildPhase: resources
       - path: THIRD_PARTY_NOTICES.md
         buildPhase: resources
       - path: BuildSupport/Brand/ChorusSoundwave.png
