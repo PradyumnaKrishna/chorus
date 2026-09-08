@@ -21,8 +21,8 @@ reading, and optional CLI completion hooks. Use the voices already on your Mac, 
 - Connect CLI completion hooks from the Integrations page.
 - Install, repair, or remove Kokoro's model through its independent companion app.
 
-macOS voices support word highlighting. Kokoro uses the compact player until reliable
-word timing is available. Kokoro speech synthesis runs locally after the initial model download.
+Every voice follows the spoken word while it reads. Kokoro speech synthesis runs locally
+after the initial model download.
 
 ## Getting started
 

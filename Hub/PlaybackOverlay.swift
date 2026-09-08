@@ -241,8 +241,9 @@ struct HighlightedExcerpt: View {
 
     var body: some View {
         if let word = SpeechHighlight.range(range, in: text) {
-            let before = String(text[..<word.lowerBound].suffix(36))
-            let after = String(text[word.upperBound...].prefix(60))
+            let window = SpeechHighlight.excerpt(around: word, in: text)
+            let before = String(text[window.lowerBound..<word.lowerBound])
+            let after = String(text[word.upperBound..<window.upperBound].prefix(140))
             Text("\(Text(before).foregroundColor(.secondary))\(Text(String(text[word])).bold().foregroundColor(.orange))\(Text(after).foregroundColor(.secondary))")
         } else {
             Text(text.isEmpty ? "Start reading in Chorus. Text appears here." : String(text.prefix(110)))

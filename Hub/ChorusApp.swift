@@ -249,7 +249,7 @@ struct ChorusView: View {
                 HStack {
                     Text("\((player.state == .idle ? text : player.spokenText).split(whereSeparator: \.isWhitespace).count) words")
                     Spacer()
-                    Text(player.state == .paused ? "Paused" : player.state == .speaking ? (player.wordHighlighting ? "Following words" : "Reading") : "Ready")
+                    Text(player.state == .paused ? "Paused" : player.state == .speaking ? (player.wordRange != nil ? "Following words" : "Reading") : "Ready")
                 }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 14).padding(.vertical, 9)
             }
             .background(Color(nsColor: .controlBackgroundColor).opacity(0.4), in: RoundedRectangle(cornerRadius: 16))
@@ -394,13 +394,17 @@ private struct SpokenTextView: NSViewRepresentable {
             context.coordinator.text = text
             context.coordinator.highlighted = nil
         }
-        let validRange = SpeechHighlight.range(range, in: text).map { NSRange($0, in: text) }
+        let spoken = SpeechHighlight.range(range, in: text)
+        let validRange = spoken.map { NSRange($0, in: text) }
         guard changedText || context.coordinator.highlighted != validRange else { return }
         if let previous = context.coordinator.highlighted {
             storage.removeAttribute(.backgroundColor, range: previous)
         }
-        if let validRange {
+        if let spoken, let validRange {
             storage.addAttribute(.backgroundColor, value: NSColor.systemOrange.withAlphaComponent(0.3), range: validRange)
+            // Show the whole paragraph where it fits, then the word itself, which is
+            // what still has to be on screen when the paragraph is taller than the view.
+            view.scrollRangeToVisible(NSRange(SpeechHighlight.paragraph(around: spoken, in: text), in: text))
             view.scrollRangeToVisible(validRange)
         }
         context.coordinator.highlighted = validRange

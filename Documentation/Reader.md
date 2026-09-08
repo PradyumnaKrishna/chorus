@@ -47,8 +47,7 @@ availability are displayed separately; neither is presented as proof of model in
 - Paste text, choose a voice, and read, pause, resume, or stop. Stop clears the completion queue.
 - While reading, macOS Now Playing and the keyboard media key can pause and resume speech,
   including when the main window is closed. Finishing or stopping clears Now Playing.
-- Choose Compact, Full, or Disabled floating player in Settings. Kokoro uses Compact
-  because its estimated timing is unsuitable for word highlighting. macOS voices support it.
+- Choose Compact, Full, or Disabled floating player in Settings.
 - Control–Option–Command–P toggles the floating player. Command–period stops speech and
   clears the queue globally. Hide preserves playback.
 - Selection reading is opt-in on the floating player and requires Accessibility permission.
@@ -84,7 +83,7 @@ other internal completions are not queued.
   copy in `~/Applications` and quit old copies.
 - **Selection reading does nothing:** enable it on the floating player and check Chorus's
   Accessibility permission. The source app must expose selected text through Accessibility.
-- **No highlighting with Kokoro:** this is expected; use a macOS voice for word highlighting.
+- **No highlighting with Kokoro:** open the companion and choose **Upgrade** if it offers one.
 - **Player shortcut unavailable:** check Settings and whether another app uses the same
   shortcut. The soundwave menu can still show the player.
 - **Downloaded app blocked:** check the release's signing notes. Unsigned and development-signed

@@ -41,7 +41,7 @@ struct PreferencesView: View {
             }.padding(16).background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
             VStack(alignment: .leading, spacing: 8) {
                 Text("Word highlighting").font(.callout.weight(.medium))
-                Text("macOS voices follow the spoken word. Chorus neural voices play continuously using the Compact player until reliable timing is available.")
+                Text("Voices follow the spoken word as they read. If one does not, open its voice app and choose Upgrade.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
                 .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
