@@ -21,12 +21,32 @@ public struct ArtifactStore: Sendable {
         self.artifacts = artifacts
     }
 
-    public func isInstalled(fileManager: FileManager = .default) -> Bool {
-        artifacts.allSatisfy { artifact in
-            let url = destination(for: artifact)
-            guard let values = try? url.resourceValues(forKeys: [.fileSizeKey]) else { return false }
-            return Int64(values.fileSize ?? -1) == artifact.expectedByteCount
+    public enum Presence: Sendable, Equatable {
+        case absent
+        /// Files are present but declared by an earlier manifest than this one.
+        case outdated
+        case installed
+    }
+
+    /// What is on disk, compared against the manifest.
+    ///
+    /// Sizes rather than checksums: digesting an installed model on a launch path
+    /// would be far too slow, and it was verified when the file was written.
+    public func presence(fileManager: FileManager = .default) -> Presence {
+        var present = false
+        var matching = true
+        for artifact in artifacts {
+            let values = try? destination(for: artifact).resourceValues(forKeys: [.fileSizeKey])
+            guard let size = values?.fileSize else { matching = false; continue }
+            present = true
+            matching = matching && Int64(size) == artifact.expectedByteCount
         }
+        if matching { return .installed }
+        return present ? .outdated : .absent
+    }
+
+    public func isInstalled(fileManager: FileManager = .default) -> Bool {
+        presence(fileManager: fileManager) == .installed
     }
 
     /// Verifies every staged artifact before replacing any installed file.

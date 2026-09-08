@@ -54,40 +54,125 @@ final class Phonemizer: @unchecked Sendable {
 
     /// Phoneme ids for `text`, or an empty array if nothing is speakable.
     func tokenize(_ text: String, language: KokoroLanguage) -> [Int] {
-        // `phonemes(for:)` takes `lock` internally and NSLock is not recursive,
-        // so resolve the string first and hold the lock only for the table read.
-        let phonemeString = phonemes(for: text, language: language)
+        align(text, language: language).tokens
+    }
+
+    /// Phoneme ids plus the source word behind each run of them.
+    ///
+    /// The ids are exactly what `tokenize` returns — both read the same phoneme
+    /// string — so asking for the alignment cannot change what the model says.
+    func align(_ text: String, language: KokoroLanguage) -> Alignment {
+        // `phonemeText(for:)` takes `lock` internally and NSLock is not recursive,
+        // so resolve the phonemes first and hold the lock only for the table read.
+        let phonemes = phonemeText(for: text, language: language)
         lock.lock()
         defer { lock.unlock() }
-        return phonemeString.compactMap { vocab[$0] }
+        let tokenized = phonemes.tokens(using: vocab)
+        return Alignment(tokens: tokenized.ids, words: tokenized.runs)
+    }
+
+    struct Alignment {
+        let tokens: [Int]
+        /// Spans of the requested text, each owning a run of consecutive tokens.
+        let words: [MappedText.Run]
     }
 
     /// The IPA string Kokoro consumes. Exposed for debugging and tests.
     func phonemes(for text: String, language: KokoroLanguage) -> String {
-        let normalized = TextNormalizer.normalize(text)
-        guard !normalized.isEmpty else { return "" }
+        phonemeText(for: text, language: language).text
+    }
+
+    /// The same IPA string, with every phoneme attributed to the word it came from.
+    func phonemeText(for text: String, language: KokoroLanguage) -> MappedText {
+        let normalized = TextNormalizer.map(text)
+        guard !normalized.isEmpty else { return MappedText() }
 
         // Punctuation is preserved verbatim: Kokoro uses it for prosody, and
         // handing it to espeak would lose it.
-        var result = ""
-        var cursor = normalized.startIndex
+        var result = MappedText()
+        var cursor = 0
+        let characters = normalized.characters
+        let source = normalized.text
         let punctuation = try! NSRegularExpression(
             pattern: #"(\s*[;:,.!?¡¿—…"«»“”(){}\[\]]+\s*)+"#)
 
-        let range = NSRange(normalized.startIndex..., in: normalized)
-        for match in punctuation.matches(in: normalized, range: range) {
-            guard let matched = Range(match.range, in: normalized) else { continue }
-            if cursor < matched.lowerBound {
-                result += espeak(String(normalized[cursor..<matched.lowerBound]), language)
+        let range = NSRange(source.startIndex..., in: source)
+        for match in punctuation.matches(in: source, range: range) {
+            guard let matched = Range(match.range, in: source) else { continue }
+            let lower = source.distance(from: source.startIndex, to: matched.lowerBound)
+            let upper = source.distance(from: source.startIndex, to: matched.upperBound)
+            if cursor < lower {
+                append(characters[cursor..<lower], of: normalized, language: language, to: &result)
             }
-            result += normalized[matched]
-            cursor = matched.upperBound
+            result.append(String(characters[lower..<upper]), origin: nil)
+            cursor = upper
         }
-        if cursor < normalized.endIndex {
-            result += espeak(String(normalized[cursor...]), language)
+        if cursor < characters.count {
+            append(characters[cursor...], of: normalized, language: language, to: &result)
         }
 
-        return postProcess(result, language: language)
+        postProcess(&result, language: language)
+        return result
+    }
+
+    /// Phonemizes one speakable run and appends it, attributing each
+    /// whitespace-separated phoneme group to a word of that run.
+    private func append(_ slice: ArraySlice<Character>, of normalized: MappedText,
+                        language: KokoroLanguage, to result: inout MappedText) {
+        let phonemes = espeak(String(slice), language)
+        guard !phonemes.isEmpty else { return }
+
+        let ranges = Self.wordRanges(in: slice)
+        let attribution = Self.attribution(
+            groups: phonemes.split(separator: " ").count,
+            // espeak turns some words into several phonetic ones — "macOS" into
+            // "mˈæk ˌoʊˈɛs" — so ask what each contributes on its own.
+            counts: ranges.map { espeak(String(slice[$0]), language).split(separator: " ").count },
+            words: ranges.map { normalized.origin(of: $0) })
+
+        // Walk the phonemes rather than rejoining the groups, so the string the
+        // model receives stays exactly what espeak produced.
+        var group = 0
+        var inGroup = false
+        for character in phonemes {
+            if character == " " {
+                if inGroup { group += 1; inGroup = false }
+                result.append(character, origin: nil)
+            } else {
+                inGroup = true
+                result.append(character, origin: attribution.indices.contains(group) ? attribution[group] : nil)
+            }
+        }
+    }
+
+    /// Word ranges in the coordinates of the array `slice` was sliced from.
+    private static func wordRanges(in slice: ArraySlice<Character>) -> [Range<Int>] {
+        var ranges: [Range<Int>] = []
+        var start: Int?
+        for index in slice.indices {
+            if slice[index].isWhitespace {
+                if let begin = start { ranges.append(begin ..< index); start = nil }
+            } else if start == nil {
+                start = index
+            }
+        }
+        if let begin = start { ranges.append(begin ..< slice.endIndex) }
+        return ranges
+    }
+
+    /// The word each phoneme group of a clause belongs to.
+    ///
+    /// `counts` is how many groups each word produces alone. When they add up to
+    /// what the clause produced the mapping is exact, even where one word became
+    /// several; otherwise groups spread evenly, keeping any error in this clause.
+    private static func attribution(groups: Int, counts: [Int],
+                                    words: [Range<Int>?]) -> [Range<Int>?] {
+        guard groups > 0, !words.isEmpty else { return [] }
+
+        if counts.count == words.count, counts.reduce(0, +) == groups {
+            return zip(words, counts).flatMap { Array(repeating: $0, count: $1) }
+        }
+        return (0 ..< groups).map { words[min($0 * words.count / groups, words.count - 1)] }
     }
 
     // MARK: - espeak-ng
@@ -116,30 +201,29 @@ final class Phonemizer: @unchecked Sendable {
     }
 
     /// Maps espeak's output onto Kokoro's phoneme inventory.
-    private func postProcess(_ input: String, language: KokoroLanguage) -> String {
-        var text = input
-
+    ///
+    /// Applied to the joined string, as the rules were written: the trailing " z"
+    /// rule can only be judged against its neighbours.
+    private func postProcess(_ text: inout MappedText, language: KokoroLanguage) {
         // "kokoro" itself is mispronounced by espeak.
         for wrong in ["kəkˈoːɹoʊ", "kəkˈɔːɹoʊ"] {
-            text = text.replacingOccurrences(of: wrong, with: "kˈoʊkəɹoʊ")
+            text.replace(NSRegularExpression.escapedPattern(for: wrong), with: "kˈoʊkəɹoʊ")
         }
         for wrong in ["kəkˈɔːɹəʊ", "kəkˈoːɹəʊ"] {
-            text = text.replacingOccurrences(of: wrong, with: "kˈəʊkəɹəʊ")
+            text.replace(NSRegularExpression.escapedPattern(for: wrong), with: "kˈəʊkəɹəʊ")
         }
 
         // Symbols espeak emits that are outside Kokoro's vocabulary.
         for (from, to) in [("ʲ", "j"), ("r", "ɹ"), ("x", "k"), ("ɬ", "l")] {
-            text = text.replacingOccurrences(of: from, with: to)
+            text.replace(NSRegularExpression.escapedPattern(for: from), with: to)
         }
 
-        text = text.replacingOccurrences(
-            of: #" z(?=[;:,.!?¡¿—…"«»“” ]|$)"#, with: "z", options: .regularExpression)
+        text.replace(#" z(?=[;:,.!?¡¿—…"«»“” ]|$)"#, with: "z")
 
         if language == .americanEnglish {
-            text = text.replacingOccurrences(
-                of: #"(?<=nˈaɪn)ti(?!ː)"#, with: "di", options: .regularExpression)
+            text.replace(#"(?<=nˈaɪn)ti(?!ː)"#, with: "di")
         }
 
-        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+        text.trim()
     }
 }

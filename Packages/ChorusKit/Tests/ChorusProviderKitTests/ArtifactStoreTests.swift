@@ -89,6 +89,34 @@ final class ArtifactStoreTests: XCTestCase {
         }
     }
 
+    func testPresenceSeparatesAnOutdatedInstallationFromAMissingOne() throws {
+        let fileManager = FileManager.default
+        let root = fileManager.temporaryDirectory
+            .appendingPathComponent("chorus-artifact-presence-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fileManager.removeItem(at: root) }
+        try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
+
+        let installed = Data("installed-model".utf8)
+        let declared = artifact(identifier: "model", path: "Models/model.onnx", data: installed)
+        let store = ArtifactStore(rootDirectory: root, artifacts: [declared])
+        XCTAssertEqual(store.presence(), .absent)
+
+        let download = root.appendingPathComponent("model.download")
+        try installed.write(to: download)
+        try store.install([StagedArtifact(descriptor: declared, fileURL: download)])
+        XCTAssertEqual(store.presence(), .installed)
+
+        // A release that declares a different model finds the old one in its place.
+        let successor = artifact(identifier: "model", path: "Models/model.onnx",
+                                 data: Data("a-larger-successor-model".utf8))
+        let upgraded = ArtifactStore(rootDirectory: root, artifacts: [successor])
+        XCTAssertEqual(upgraded.presence(), .outdated)
+        XCTAssertFalse(upgraded.isInstalled())
+
+        try upgraded.uninstall()
+        XCTAssertEqual(upgraded.presence(), .absent)
+    }
+
     private func artifact(identifier: String, path: String, data: Data) -> ArtifactDescriptor {
         ArtifactDescriptor(
             identifier: identifier,

@@ -14,9 +14,10 @@ Requires macOS 14+ on Apple Silicon. Place the signed `Chorus Kokoro.app` in
 is checked against its expected size and SHA-256 checksum before installation.
 Return to Chorus → **Voice apps** and choose **Refresh voices** after setup.
 
-Use **Repair** to download fresh verified model files. Use **Uninstall** to remove the
-downloaded files owned by this provider. To remove the app completely, uninstall the model
-first, quit the app, then move it to Trash; deleting only the app leaves its model behind.
+Use **Repair** to download fresh verified model files, or **Upgrade** when a release
+declares a newer model than the one installed. Use **Uninstall** to remove the downloaded
+files owned by this provider. To remove the app completely, uninstall the model first, quit
+the app, then move it to Trash; deleting only the app leaves its model behind.
 
 Models live under `Artifacts/` in the companion's team-derived App Group container, not
 inside the app bundle. A build signed by another team uses a different container. Installing

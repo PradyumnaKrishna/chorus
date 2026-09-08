@@ -57,8 +57,20 @@ final class KokoroEngine {
 
     var voices: [KokoroVoice] { KokoroVoice.catalog(in: voicesDirectory) }
 
+    /// Whether the loaded model reports the phoneme durations word timing needs.
+    /// One installed before the timestamped export still speaks without them.
+    var publishesWordTiming: Bool { kokoro_ort_has_durations(model) != 0 }
+
     func voice(withIdentifier identifier: String) -> KokoroVoice? {
         voices.first { $0.voiceIdentifier == identifier }
+    }
+
+    /// Audio for one span of text, with the alignment a reader needs to follow it.
+    struct Synthesis {
+        var samples: [Float]
+        /// Word spans of the requested text, positioned in `samples`. Empty when
+        /// the model publishes no durations.
+        var words: [WordTiming]
     }
 
     /// Synthesizes one span of text. Long text should be split with
@@ -68,29 +80,42 @@ final class KokoroEngine {
     /// several passes rather than clipped. `chunkRanges` budgets *characters* for
     /// latency; normalization and phonemization can expand them beyond the token
     /// cap, so the actual token count must still be checked here.
-    func synthesize(_ text: String, voice: KokoroVoice, speed: Float = 1.0) throws -> [Float] {
-        let ids = Phonemizer.shared.tokenize(text, language: voice.language)
-        guard !ids.isEmpty else { return [] }
-
-        guard ids.count > Self.maxTokens else {
-            return try synthesize(tokens: ids, voice: voice, speed: speed)
-        }
+    func synthesize(_ text: String, voice: KokoroVoice, speed: Float = 1.0) throws -> Synthesis {
+        let alignment = Phonemizer.shared.align(text, language: voice.language)
+        guard !alignment.tokens.isEmpty else { return Synthesis(samples: [], words: []) }
 
         var samples: [Float] = []
-        for start in stride(from: 0, to: ids.count, by: Self.maxTokens) {
-            let run = Array(ids[start ..< min(start + Self.maxTokens, ids.count)])
-            samples.append(contentsOf: try synthesize(tokens: run, voice: voice, speed: speed))
+        var spans: [Range<Int>] = []
+        var aligned = true
+
+        for start in stride(from: 0, to: alignment.tokens.count, by: Self.maxTokens) {
+            let run = Array(alignment.tokens[start ..< min(start + Self.maxTokens, alignment.tokens.count)])
+            let pass = try synthesize(tokens: run, voice: voice, speed: speed)
+            // A later pass continues the same timeline, so shift its spans along it.
+            let offset = samples.count
+            spans.append(contentsOf: pass.spans.map { $0.lowerBound + offset ..< $0.upperBound + offset })
+            samples.append(contentsOf: pass.samples)
+            aligned = aligned && pass.spans.count == run.count
         }
-        return samples
+
+        return Synthesis(
+            samples: samples,
+            words: aligned ? SpeechAlignment.timings(for: alignment.words, spans: spans) : [])
     }
 
     /// One forward pass over a token run that is known to fit the positional limit.
-    private func synthesize(tokens: [Int], voice: KokoroVoice, speed: Float) throws -> [Float] {
+    ///
+    /// `spans` is empty unless the model publishes durations, and its offsets are
+    /// relative to this pass's own audio.
+    private func synthesize(tokens: [Int], voice: KokoroVoice,
+                            speed: Float) throws -> (samples: [Float], spans: [Range<Int>]) {
         let padded = [Int64(0)] + tokens.map(Int64.init) + [Int64(0)]
         let style = try styleVector(for: voice, tokenCount: tokens.count)
 
         var samples: UnsafeMutablePointer<Float>?
         var count = 0
+        var durations: UnsafeMutablePointer<Float>?
+        var durationCount = 0
         var error = [CChar](repeating: 0, count: 512)
 
         let status = padded.withUnsafeBufferPointer { idsBuffer in
@@ -100,13 +125,19 @@ final class KokoroEngine {
                                styleBuffer.baseAddress, styleBuffer.count,
                                max(0.1, speed),
                                &samples, &count,
+                               &durations, &durationCount,
                                &error, error.count)
             }
         }
 
         guard status == 0, let samples else { throw Error.inference(String(cString: error)) }
         defer { kokoro_ort_free(samples) }
-        return Array(UnsafeBufferPointer(start: samples, count: count))
+        let audio = Array(UnsafeBufferPointer(start: samples, count: count))
+
+        guard let durations else { return (audio, []) }
+        defer { kokoro_ort_free(durations) }
+        let frames = Array(UnsafeBufferPointer(start: durations, count: durationCount))
+        return (audio, SpeechAlignment.spans(frames: frames, totalSamples: count))
     }
 
     /// The style tensor is indexed by token count, so each voice file holds one

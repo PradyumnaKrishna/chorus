@@ -36,6 +36,7 @@ struct ChorusInstallerPreview {
         // dark palette actually resolves.
         let states: [(name: String, status: InstallerController.InstallationStatus)] = [
             ("installer", .notInstalled),
+            ("upgrade", .outdated),
             ("maintenance", .installed)
         ]
         let appearances: [(name: String, appearance: NSAppearance.Name)] = [

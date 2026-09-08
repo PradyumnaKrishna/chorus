@@ -13,23 +13,64 @@ guard let voice = engine.voices.first(where: { $0.id == arguments[4] }) else {
 }
 
 print("voices available: \(engine.voices.count)")
+print("word timing: \(engine.publishesWordTiming ? "published by this model" : "unavailable — this model has no durations output")")
 print("phonemes: \(Phonemizer.shared.phonemes(for: text, language: voice.language))")
 
 let started = Date()
 let characters = Array(text)
 var samples: [Float] = []
-for (index, range) in engine.chunkRanges(of: text).enumerated() {
+/// Word spans in the finished audio, as the audio unit would publish them.
+var words: [(text: String, samples: Range<Int>)] = []
+
+let ranges = engine.chunkRanges(of: text)
+for (index, range) in ranges.enumerated() {
     let chunkStart = Date()
-    let audio = try engine.synthesize(String(characters[range]), voice: voice)
-    samples.append(contentsOf: audio)
-    print(String(format: "chunk %d: %.2fs audio in %.2fs", index + 1,
-                 Double(audio.count) / KokoroEngine.sampleRate, Date().timeIntervalSince(chunkStart)))
+    let chunk = String(characters[range])
+    var result = try engine.synthesize(chunk, voice: voice)
+    // Mirror the audio unit: trim, then move the offsets onto the played buffer.
+    let trimmed = KokoroAudio.trimPadding(&result.samples, chunkText: chunk,
+                                          hasFollowingChunk: index + 1 < ranges.count)
+    let base = samples.count
+    for word in result.words {
+        let start = max(0, word.samples.lowerBound - trimmed)
+        guard start < result.samples.count else { continue }
+        let end = min(result.samples.count, max(start, word.samples.upperBound - trimmed))
+        let source = (range.lowerBound + word.source.lowerBound) ..< (range.lowerBound + word.source.upperBound)
+        words.append((String(characters[source]), (base + start) ..< (base + end)))
+    }
+    samples.append(contentsOf: result.samples)
+    print(String(format: "chunk %d: %.2fs audio in %.2fs, %d words timed", index + 1,
+                 Double(result.samples.count) / KokoroEngine.sampleRate,
+                 Date().timeIntervalSince(chunkStart), result.words.count))
 }
 let elapsed = Date().timeIntervalSince(started)
 let duration = Double(samples.count) / KokoroEngine.sampleRate
 print(String(format: "audio: %.2fs  synthesis: %.2fs  realtime factor: %.2f",
              duration, elapsed, elapsed / max(duration, 0.001)))
 print(String(format: "peak: %.3f", samples.map(abs).max() ?? 0))
+
+if words.isEmpty {
+    print("no words were timed")
+} else {
+    var previous = 0
+    for word in words {
+        precondition(word.samples.lowerBound >= previous, "word timings must not run backwards")
+        precondition(word.samples.upperBound <= samples.count, "word timings must stay inside the audio")
+        previous = word.samples.lowerBound
+        print(String(format: "  %6.2f–%6.2fs  %@",
+                     Double(word.samples.lowerBound) / KokoroEngine.sampleRate,
+                     Double(word.samples.upperBound) / KokoroEngine.sampleRate,
+                     word.text))
+    }
+    let timings = words.map {
+        ["text": $0.text,
+         "start": Double($0.samples.lowerBound) / KokoroEngine.sampleRate,
+         "end": Double($0.samples.upperBound) / KokoroEngine.sampleRate] as [String: Any]
+    }
+    let json = try JSONSerialization.data(withJSONObject: timings, options: [.prettyPrinted])
+    try json.write(to: URL(fileURLWithPath: "/tmp/kokoro-test.json"))
+    print("wrote /tmp/kokoro-test.json (\(words.count) words)")
+}
 
 var pcm = Data()
 for sample in samples {

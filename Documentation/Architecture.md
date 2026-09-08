@@ -34,6 +34,9 @@ Chorus Kokoro.app
 
 The app installs the model; the extension speaks. Providers never load one another's code.
 
+Word markers come from timings the model reports. The extension probes for that output at
+load, so a model predating it still speaks.
+
 ## ChorusKit
 
 Two libraries, split by what an app extension can link:
@@ -51,6 +54,9 @@ using the same `Provider.json` the installer wrote against.
 `ProviderDescriptor` is the whole interface between a provider and the installer. Every
 artifact declares a stable identifier, an HTTPS source, a relative destination, an exact
 byte count, and a SHA-256 digest.
+
+`ArtifactStore` reports absent, outdated, or installed rather than a boolean, so a manifest
+declaring a new artifact offers an upgrade instead of appearing uninstalled.
 
 Install and repair download everything before committing anything, and verification
 completes before an existing file is touched. During the commit, existing files are backed

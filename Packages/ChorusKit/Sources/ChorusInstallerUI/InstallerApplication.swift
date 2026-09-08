@@ -131,8 +131,10 @@ public struct InstallerView: View {
         let name = controller.descriptor.displayName
         switch controller.phase {
         case .ready(.notInstalled): return "Install \(name)"
+        case .ready(.outdated): return "Upgrade \(name)"
         case .ready(.installed): return "\(name) is installed"
         case .downloading(.repair, _), .verifying(.repair): return "Repairing \(name)"
+        case .downloading(.upgrade, _), .verifying(.upgrade): return "Upgrading \(name)"
         case .downloading(_, _), .verifying(_): return "Installing \(name)"
         case .removing: return "Uninstalling \(name)"
         case .completed(.uninstall): return "\(name) uninstalled"
@@ -145,6 +147,8 @@ public struct InstallerView: View {
         switch controller.phase {
         case .ready(.notInstalled):
             return controller.descriptor.summary
+        case .ready(.outdated):
+            return "A newer model is available. Upgrading replaces the installed files and lets Chorus follow the spoken word while these voices read."
         case .ready(.installed):
             return "Repair the installed files with fresh verified copies, or remove this provider’s downloaded files from your Mac."
         case .downloading:
@@ -177,6 +181,26 @@ public struct InstallerView: View {
                 Label(downloadSize, systemImage: "lock.shield")
                     .font(.callout)
                     .foregroundStyle(palette.ink.opacity(0.62))
+            }
+
+        case .ready(.outdated):
+            HStack(spacing: 36) {
+                operationButton(
+                    "Upgrade",
+                    systemImage: "arrow.up.circle",
+                    color: palette.brandAccent,
+                    iconSize: 29
+                ) {
+                    controller.perform(.upgrade)
+                }
+                operationButton(
+                    "Uninstall",
+                    systemImage: "trash",
+                    color: .red.opacity(0.86),
+                    iconSize: 29
+                ) {
+                    controller.perform(.uninstall)
+                }
             }
 
         case .ready(.installed):

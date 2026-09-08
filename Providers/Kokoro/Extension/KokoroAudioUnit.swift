@@ -35,6 +35,11 @@ public final class KokoroAudioUnit: AVSpeechSynthesisProviderAudioUnit, @uncheck
         return loadedEngine
     }
 
+    /// Reported to macOS so a client can tell one release of these voices from
+    /// another. Tracks the extension's own version rather than repeating it.
+    private static let voiceVersion = Bundle(for: KokoroAudioUnit.self)
+        .object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+
     private static func makeEngine() -> KokoroEngine? {
         let bundle = Bundle(for: KokoroAudioUnit.self)
         guard let resources = bundle.resourceURL else { return nil }
@@ -48,9 +53,13 @@ public final class KokoroAudioUnit: AVSpeechSynthesisProviderAudioUnit, @uncheck
 
     /// The downloaded model, or nil to fall back to whatever ships in the bundle.
     ///
-    /// The location, expected size, and installed check all come from the same
+    /// The location, expected size, and presence check all come from the same
     /// `Provider.json` the containing app installed against, so the extension
     /// cannot drift from what the installer actually wrote.
+    ///
+    /// A model left by an earlier release is still used: its checksum was verified
+    /// when written, so a manifest bump makes it outdated rather than unsafe, and
+    /// these voices must keep speaking until the app offers the upgrade.
     private static func installedModelURL(in bundle: Bundle) -> URL? {
         do {
             let descriptor = try ProviderDescriptor.load(from: bundle)
@@ -64,7 +73,7 @@ public final class KokoroAudioUnit: AVSpeechSynthesisProviderAudioUnit, @uncheck
                 rootDirectory: try ProviderContainer.storageDirectory(in: bundle),
                 artifacts: [artifact]
             )
-            return store.isInstalled() ? store.destination(for: artifact) : nil
+            return store.presence() == .absent ? nil : store.destination(for: artifact)
         } catch {
             log.error("model unavailable: \(error.localizedDescription, privacy: .public)")
             return nil
@@ -115,7 +124,7 @@ public final class KokoroAudioUnit: AVSpeechSynthesisProviderAudioUnit, @uncheck
                     primaryLanguages: [voice.language.bcp47],
                     supportedLanguages: [voice.language.bcp47])
                 provider.gender = voice.isFemale ? .female : .male
-                provider.version = "1.0"
+                provider.version = Self.voiceVersion
                 return provider
             }
         }
@@ -168,15 +177,17 @@ public final class KokoroAudioUnit: AVSpeechSynthesisProviderAudioUnit, @uncheck
 
             let text = String(characters[range])
             do {
-                var audio = try engine.synthesize(text, voice: voice, speed: ssml.rate)
-                KokoroAudio.trimPadding(&audio, chunkText: text, hasFollowingChunk: index + 1 < ranges.count)
+                var result = try engine.synthesize(text, voice: voice, speed: ssml.rate)
+                let trimmed = KokoroAudio.trimPadding(&result.samples, chunkText: text,
+                                                      hasFollowingChunk: index + 1 < ranges.count)
                 guard isCurrent(generation) else { return }
-                guard !audio.isEmpty else { continue }
+                guard !result.samples.isEmpty else { continue }
 
-                publishMarkers(for: range, in: ssml, characters: characters,
-                               startFrame: frames, frameCount: audio.count, request: request)
-                frames += audio.count
-                append(audio, generation: generation)
+                publishMarkers(result.words, for: range, in: ssml, startFrame: frames,
+                               trimmedLeadingSamples: trimmed, sampleCount: result.samples.count,
+                               request: request)
+                frames += result.samples.count
+                append(result.samples, generation: generation)
             } catch {
                 log.error("chunk failed: \(error.localizedDescription, privacy: .public)")
             }
@@ -188,16 +199,18 @@ public final class KokoroAudioUnit: AVSpeechSynthesisProviderAudioUnit, @uncheck
         }
     }
 
-    /// This ONNX integration exposes no phoneme durations, so word timings are apportioned
-    /// across the chunk by character position. These remain approximate; clients
-    /// requiring exact alignment should omit timed highlighting.
-    private func publishMarkers(for range: Range<Int>, in ssml: SSMLText, characters: [Character],
-                                startFrame: Int, frameCount: Int,
+    /// Word markers placed from the model's own phoneme durations.
+    ///
+    /// An older model publishes none, and this emits nothing rather than guessing.
+    private func publishMarkers(_ timings: [WordTiming], for range: Range<Int>, in ssml: SSMLText,
+                                startFrame: Int, trimmedLeadingSamples: Int, sampleCount: Int,
                                 request: AVSpeechSynthesisProviderRequest) {
-        guard let publish = speechSynthesisOutputMetadataBlock else { return }
+        guard let publish = speechSynthesisOutputMetadataBlock, !timings.isEmpty else { return }
 
-        let markers = KokoroSpeechMarkers.words(text: String(characters[range]), characterOffset: range.lowerBound,
-                                               ssml: ssml, startFrame: startFrame, frameCount: frameCount)
+        let markers = KokoroSpeechMarkers.words(timings, characterOffset: range.lowerBound,
+                                                ssml: ssml, startFrame: startFrame,
+                                                trimmedLeadingSamples: trimmedLeadingSamples,
+                                                sampleCount: sampleCount)
 
         guard !markers.isEmpty else { return }
         publish(markers, request)

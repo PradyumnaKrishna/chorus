@@ -30,6 +30,9 @@ enable system voice registration. Place `Chorus Kokoro.app` in
 `~/Applications`, then open it to install its model. Chorus's **Voice apps** page can
 open the installed companion; it does not download, install, or remove apps.
 
+A release can declare a newer model than the one installed. The companion then offers
+**Upgrade** in place of Repair, and the installed model keeps working until you take it.
+
 Chorus Kokoro owns model download, verification, repair, and removal. Its model lives
 under `Artifacts/` in its team-derived App Group container. Moving the companion to
 Trash does not remove that model; use the companion's removal action first when needed.
@@ -57,9 +60,9 @@ availability are displayed separately; neither is presented as proof of model in
   link destinations, harness UI directives, and fenced code are removed before speech.
   Custom `CODEX_HOME` and `CLAUDE_CONFIG_DIR` locations are respected when available to Chorus.
 
-`make test` checks completion input filtering, Unicode highlighting, voice classification,
-and selection debounce. Native playback, global shortcuts, Accessibility permissions, and
-provider registration should also be exercised on a destination Mac.
+`make test` checks the reader, engine, and installer contracts. Native playback, global
+shortcuts, Accessibility permissions, and provider registration should also be exercised on
+a destination Mac.
 
 ## CLI integrations
 

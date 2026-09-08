@@ -5,11 +5,13 @@ import Foundation
 public final class InstallerController: ObservableObject {
     public enum InstallationStatus: Equatable, Sendable {
         case notInstalled
+        case outdated
         case installed
     }
 
     public enum Operation: Equatable, Sendable {
         case install
+        case upgrade
         case repair
         case uninstall
     }
@@ -40,7 +42,7 @@ public final class InstallerController: ObservableObject {
             ArtifactStore(rootDirectory: $0, artifacts: descriptor.artifacts)
         }
         self.store = resolvedStore
-        phase = .ready(initialStatus ?? (resolvedStore?.isInstalled() == true ? .installed : .notInstalled))
+        phase = .ready(initialStatus ?? resolvedStore.map { Self.status(for: $0.presence()) } ?? .notInstalled)
     }
 
     /// Starts an operation only when it is valid for the current installation state.
@@ -52,10 +54,9 @@ public final class InstallerController: ObservableObject {
             )
             return
         }
-        let isInstalled = store.isInstalled()
-        guard (operation == .install && !isInstalled) ||
-              (operation != .install && isInstalled) else {
-            phase = .ready(isInstalled ? .installed : .notInstalled)
+        let presence = store.presence()
+        guard Self.allows(operation, at: presence) else {
+            phase = .ready(Self.status(for: presence))
             return
         }
 
@@ -72,7 +73,7 @@ public final class InstallerController: ObservableObject {
     private func run(_ operation: Operation, store: ArtifactStore) async {
         do {
             switch operation {
-            case .install, .repair:
+            case .install, .upgrade, .repair:
                 try await installArtifacts(for: operation, store: store)
             case .uninstall:
                 phase = .removing
@@ -84,7 +85,7 @@ public final class InstallerController: ObservableObject {
             // A cancelled URLSession transfer surfaces as NSURLErrorCancelled rather
             // than CancellationError, so neither alone is enough to spot a cancel.
             phase = Self.wasCancelled(error)
-                ? .ready(store.isInstalled() ? .installed : .notInstalled)
+                ? .ready(Self.status(for: store.presence()))
                 : .failed(operation, error.localizedDescription)
         }
         activeTask = nil
@@ -132,6 +133,25 @@ public final class InstallerController: ObservableObject {
 
         // install(_:) consumed the staged files; there is nothing left to remove.
         staged = []
+    }
+
+    /// Each operation applies to one installation state. Uninstall is the exception:
+    /// it removes whatever is there, current or not.
+    private static func allows(_ operation: Operation, at presence: ArtifactStore.Presence) -> Bool {
+        switch operation {
+        case .install:   return presence == .absent
+        case .upgrade:   return presence == .outdated
+        case .repair:    return presence == .installed
+        case .uninstall: return presence != .absent
+        }
+    }
+
+    private static func status(for presence: ArtifactStore.Presence) -> InstallationStatus {
+        switch presence {
+        case .absent:    return .notInstalled
+        case .outdated:  return .outdated
+        case .installed: return .installed
+        }
     }
 
     private static func wasCancelled(_ error: Error) -> Bool {

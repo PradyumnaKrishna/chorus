@@ -7,7 +7,7 @@ XCODEBUILD = xcodebuild -project "$(APP).xcodeproj" -scheme "$(APP)" \
 	-derivedDataPath "build/$(APP)" \
 	-destination 'generic/platform=macOS' -quiet
 
-.PHONY: debug release validate bootstrap icon generate test test-hub render engine-smoke clean
+.PHONY: debug release validate bootstrap icon generate test test-hub test-kokoro-text render engine-smoke clean
 
 # Signing is independent of Debug/Release and requires both environment values.
 ifeq ($(and $(strip $(DEVELOPMENT_TEAM)),$(filter-out -,$(strip $(CODE_SIGN_IDENTITY)))),)
@@ -41,7 +41,16 @@ test-hub:
 		Shared/*.swift Tests/Hub/main.swift -o build/Tests/chorus-hub-tests
 	build/Tests/chorus-hub-tests
 
-test: test-hub
+test-kokoro-text:
+	mkdir -p build/Tests
+	swiftc -swift-version 5 -strict-concurrency=complete -module-cache-path build/ModuleCache.noindex \
+		Providers/Kokoro/Engine/MappedText.swift Providers/Kokoro/Engine/TextNormalizer.swift \
+		Providers/Kokoro/Engine/WordTiming.swift Providers/Kokoro/Engine/SpeechAudio.swift \
+		Providers/Kokoro/Engine/SSML.swift \
+		Providers/Kokoro/Tests/TextContracts/main.swift -o build/Tests/kokoro-text-tests
+	build/Tests/kokoro-text-tests
+
+test: test-hub test-kokoro-text
 	swift test --package-path Packages/ChorusKit --scratch-path build/Tests/ChorusKit
 	find Providers Hub -type f \( -name '*.plist' -o -name '*.entitlements' \) -print0 | xargs -0 plutil -lint
 

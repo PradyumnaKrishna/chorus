@@ -1,20 +1,25 @@
 import AVFoundation
 
 /// The provider API measures time in PCM bytes and text in source-SSML UTF-16 units.
-/// Kokoro has no phoneme alignment, so positions within a chunk remain estimates.
 enum KokoroSpeechMarkers {
-    static func words(text: String, characterOffset: Int, ssml: SSMLText,
-                      startFrame: Int, frameCount: Int) -> [AVSpeechSynthesisMarker] {
-        let length = max(text.count, 1)
-        var markers: [AVSpeechSynthesisMarker] = []
-        text.enumerateSubstrings(in: text.startIndex..., options: [.byWords, .localized]) { _, range, _, _ in
-            let offset = text.distance(from: text.startIndex, to: range.lowerBound)
-            let end = text.distance(from: text.startIndex, to: range.upperBound)
-            let frame = startFrame + Int(Double(frameCount) * Double(offset) / Double(length))
-            let sourceRange = ssml.ssmlRange(for: (characterOffset + offset)..<(characterOffset + end))
-            markers.append(AVSpeechSynthesisMarker(markerType: .word, forTextRange: sourceRange,
-                                                   atByteSampleOffset: frame * MemoryLayout<Float>.stride))
+    /// Word markers for one synthesized chunk.
+    ///
+    /// `timings` are offsets into the untrimmed audio; `trimmedLeadingSamples` moves
+    /// them onto the buffer actually published. A word trimmed away entirely is
+    /// dropped rather than pinned to the start of the chunk.
+    static func words(_ timings: [WordTiming], characterOffset: Int, ssml: SSMLText,
+                      startFrame: Int, trimmedLeadingSamples: Int,
+                      sampleCount: Int) -> [AVSpeechSynthesisMarker] {
+        timings.compactMap { timing in
+            let offset = timing.samples.lowerBound - trimmedLeadingSamples
+            guard offset < sampleCount else { return nil }
+            let range = ssml.ssmlRange(for: (characterOffset + timing.source.lowerBound)
+                                        ..< (characterOffset + timing.source.upperBound))
+            guard range.length > 0 else { return nil }
+            return AVSpeechSynthesisMarker(
+                markerType: .word,
+                forTextRange: range,
+                atByteSampleOffset: (startFrame + max(0, offset)) * MemoryLayout<Float>.stride)
         }
-        return markers
     }
 }

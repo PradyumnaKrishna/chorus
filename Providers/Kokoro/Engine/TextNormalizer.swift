@@ -8,67 +8,73 @@ import Foundation
 /// abbreviations are read out.
 enum TextNormalizer {
 
-    static func normalize(_ input: String) -> String {
-        var text = input
+    static func normalize(_ input: String) -> String { map(input).text }
+
+    /// Normalization with every character mapped back to the text it came from,
+    /// so the phonemizer can attribute phonemes to the words a reader can see.
+    static func map(_ input: String) -> MappedText {
+        var text = MappedText(input)
 
         // 1. Quotes and brackets. Parentheses become guillemets so that the
         //    punctuation splitter can treat them as a single class later.
-        text = text.replacingOccurrences(of: "[‘’]", with: "'", options: .regularExpression)
-        text = text.replacingOccurrences(of: "«", with: "“")
-        text = text.replacingOccurrences(of: "»", with: "”")
-        text = text.replacingOccurrences(of: "[“”]", with: "\"", options: .regularExpression)
-        text = text.replacingOccurrences(of: "(", with: "«")
-        text = text.replacingOccurrences(of: ")", with: "»")
+        text.replace("[‘’]", with: "'")
+        text.replace("«", with: "“")
+        text.replace("»", with: "”")
+        text.replace("[“”]", with: "\"")
+        text.replace(#"\("#, with: "«")
+        text.replace(#"\)"#, with: "»")
 
         // 2. Full-width CJK punctuation to its ASCII equivalent.
         for (from, to) in [("、", ", "), ("。", ". "), ("！", "! "),
-                           ("，", ", "), ("：", ": "), ("；", "; "), ("？", "? ")] {
-            text = text.replacingOccurrences(of: from, with: to)
+                           ("，", ", "), ("：", ": "), ("；", "; "),
+                           ("？", "? ")] {
+            text.replace(NSRegularExpression.escapedPattern(for: from), with: to)
         }
 
         // 3. Whitespace.
-        text = regexReplace(text, #"[^\S \n]"#, with: " ")
-        text = regexReplace(text, #"  +"#, with: " ")
-        text = regexReplace(text, #"(?<=\n) +(?=\n)"#, with: "")
+        text.replace(#"[^\S \n]"#, with: " ")
+        text.replace(#"  +"#, with: " ")
+        text.replace(#"(?<=\n) +(?=\n)"#, with: "")
 
         // 4. Abbreviations that espeak would otherwise spell out or clip.
-        text = regexReplace(text, #"\bD[Rr]\.(?= [A-Z])"#, with: "Doctor")
-        text = regexReplace(text, #"\b(?:Mr\.|MR\.(?= [A-Z]))"#, with: "Mister")
-        text = regexReplace(text, #"\b(?:Ms\.|MS\.(?= [A-Z]))"#, with: "Miss")
-        text = regexReplace(text, #"\b(?:Mrs\.|MRS\.(?= [A-Z]))"#, with: "Mrs")
-        text = regexReplace(text, #"\betc\.(?! [A-Z])"#, with: "etc", options: [.caseInsensitive])
+        text.replace(#"\bD[Rr]\.(?= [A-Z])"#, with: "Doctor")
+        text.replace(#"\b(?:Mr\.|MR\.(?= [A-Z]))"#, with: "Mister")
+        text.replace(#"\b(?:Ms\.|MS\.(?= [A-Z]))"#, with: "Miss")
+        text.replace(#"\b(?:Mrs\.|MRS\.(?= [A-Z]))"#, with: "Mrs")
+        text.replace(#"\betc\.(?! [A-Z])"#, with: "etc", options: [.caseInsensitive])
 
         // 5. Casual spellings.
-        text = regexReplace(text, #"\b(y)eah?\b"#, with: "$1e'a", options: [.caseInsensitive])
+        text.replace(#"\b(y)eah?\b"#, with: "$1e'a", options: [.caseInsensitive])
 
         // 6. Numbers, times, years and currency.
         // Protect dotted versions before decimal matching consumes adjacent parts
         // (0.1.1 used to become "0 point 1.1", losing a spoken separator).
-        text = regexReplaceMap(text, #"\b[vV]?\d+(?:\.\d+){2,}\b"#) { version in
+        text.replace(#"\b[vV]?\d+(?:\.\d+){2,}\b"#) { version in
             let prefixed = version.first == "v" || version.first == "V"
             let number = prefixed ? String(version.dropFirst()) : version
             return (prefixed ? "version " : "") + number.components(separatedBy: ".").joined(separator: " point ")
         }
-        text = regexReplaceMap(text, #"\d*\.\d+|\b\d{4}s?\b|(?<!:)\b(?:[1-9]|1[0-2]):[0-5]\d\b(?!:)"#, splitNumber)
-        text = regexReplace(text, #"(?<=\d),(?=\d)"#, with: "")
-        text = regexReplaceMap(text,
+        text.replace(#"\d*\.\d+|\b\d{4}s?\b|(?<!:)\b(?:[1-9]|1[0-2]):[0-5]\d\b(?!:)"#, splitNumber)
+        text.replace(#"(?<=\d),(?=\d)"#, with: "")
+        text.replace(
             #"[$£]\d+(?:\.\d+)?(?: hundred| thousand| (?:[bm]|tr)illion)*\b|[$£]\d+\.\d\d?\b"#,
             options: [.caseInsensitive], flipMoney)
-        text = regexReplaceMap(text, #"\d*\.\d+"#, pointNumber)
-        text = regexReplace(text, #"(?<=\d)-(?=\d)"#, with: " to ")
-        text = regexReplace(text, #"(?<=\d)S"#, with: " S")
+        text.replace(#"\d*\.\d+"#, pointNumber)
+        text.replace(#"(?<=\d)-(?=\d)"#, with: " to ")
+        text.replace(#"(?<=\d)S"#, with: " S")
 
         // 7. Possessives: force the 's onto the preceding consonant.
-        text = regexReplace(text, #"(?<=[BCDFGHJ-NP-TV-Z])'?s\b"#, with: "'S")
-        text = regexReplace(text, #"(?<=X')S\b"#, with: "s")
+        text.replace(#"(?<=[BCDFGHJ-NP-TV-Z])'?s\b"#, with: "'S")
+        text.replace(#"(?<=X')S\b"#, with: "s")
 
         // 8. Initialisms: "U.S. a" -> "U-S- a", "N.A.S.A" -> "N-A-S-A".
-        text = regexReplaceMap(text, #"(?:[A-Za-z]\.){2,} [a-z]"#) {
+        text.replace(#"(?:[A-Za-z]\.){2,} [a-z]"#) {
             $0.replacingOccurrences(of: ".", with: "-")
         }
-        text = regexReplace(text, #"(?<=[A-Z])\.(?=[A-Z])"#, with: "-", options: [.caseInsensitive])
+        text.replace(#"(?<=[A-Z])\.(?=[A-Z])"#, with: "-", options: [.caseInsensitive])
 
-        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+        text.trim()
+        return text
     }
 
     // MARK: - Number handling
@@ -124,29 +130,4 @@ enum TextNormalizer {
         guard parts.count == 2 else { return match }
         return "\(parts[0]) point \(parts[1].map(String.init).joined(separator: " "))"
     }
-
-    // MARK: - Regex helpers
-
-    private static func regexReplace(_ text: String, _ pattern: String, with template: String,
-                                     options: NSRegularExpression.Options = []) -> String {
-        guard let re = try? NSRegularExpression(pattern: pattern, options: options) else { return text }
-        return re.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text),
-                                           withTemplate: template)
-    }
-
-    /// Replaces each match with the result of `transform`, walking backwards so
-    /// that earlier ranges stay valid as we mutate the string.
-    private static func regexReplaceMap(_ text: String, _ pattern: String,
-                                        options: NSRegularExpression.Options = [],
-                                        _ transform: (String) -> String) -> String {
-        guard let re = try? NSRegularExpression(pattern: pattern, options: options) else { return text }
-        var result = text
-        let matches = re.matches(in: text, range: NSRange(text.startIndex..., in: text))
-        for match in matches.reversed() {
-            guard let range = Range(match.range, in: result) else { continue }
-            result.replaceSubrange(range, with: transform(String(result[range])))
-        }
-        return result
-    }
-
 }
