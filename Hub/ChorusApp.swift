@@ -1,4 +1,5 @@
 import SwiftUI
+import ChorusIntegrationKit
 
 #if !CHORUS_SNAPSHOT
 @main

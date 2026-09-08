@@ -1,4 +1,5 @@
 import SwiftUI
+import ChorusIntegrationKit
 
 struct IntegrationSetupView: View {
     let source: Harness

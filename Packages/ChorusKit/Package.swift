@@ -11,12 +11,21 @@ let package = Package(
     products: [
         .library(name: "ChorusProviderKit", targets: ["ChorusProviderKit"]),
         .library(name: "ChorusInstallerUI", targets: ["ChorusInstallerUI"]),
+        .library(name: "ChorusIntegrationKit", targets: ["ChorusIntegrationKit"]),
         .executable(name: "chorus-installer-preview", targets: ["ChorusInstallerPreview"])
+    ],
+    dependencies: [
+        .package(url: "https://github.com/swiftlang/swift-markdown.git", exact: "0.8.0")
     ],
     targets: [
         .target(name: "ChorusProviderKit"),
         .target(name: "ChorusInstallerUI", dependencies: ["ChorusProviderKit"]),
+        .target(
+            name: "ChorusIntegrationKit",
+            dependencies: [.product(name: "Markdown", package: "swift-markdown")]
+        ),
         .executableTarget(name: "ChorusInstallerPreview", dependencies: ["ChorusInstallerUI"]),
-        .testTarget(name: "ChorusProviderKitTests", dependencies: ["ChorusProviderKit"])
+        .testTarget(name: "ChorusProviderKitTests", dependencies: ["ChorusProviderKit"]),
+        .testTarget(name: "ChorusIntegrationKitTests", dependencies: ["ChorusIntegrationKit"])
     ]
 )

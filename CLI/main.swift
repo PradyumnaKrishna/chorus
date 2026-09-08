@@ -1,4 +1,5 @@
 import Foundation
+import ChorusIntegrationKit
 
 // Hooks must never block a harness turn: no speech, transcript reads, or network work here.
 do {

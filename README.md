@@ -90,9 +90,9 @@ private text and credentials from any screenshots or logs.
 
 | Path | Contents |
 | --- | --- |
-| `Packages/ChorusKit` | `ChorusProviderKit` (manifests, artifact store, downloads) and `ChorusInstallerUI` |
+| `Packages/ChorusKit` | Integration, installer, and provider contracts |
 | `Providers/Kokoro` | Kokoro app, speech extension, engine, and native dependencies |
-| `Hub`, `CLI`, `Shared` | Chorus reader, completion hook, and shared contracts |
+| `Hub`, `CLI`, `Shared` | Chorus reader, completion hook, and speech helpers |
 | `BuildSupport` | Shared brand assets and XcodeGen templates |
 | `Documentation` | [Architecture](Documentation/Architecture.md) and [Adding a provider](Documentation/AddingAProvider.md) |
 

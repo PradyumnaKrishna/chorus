@@ -3,34 +3,6 @@ import Foundation
 func require(_ condition: Bool, _ message: String) {
     if !condition { fatalError(message) }
 }
-func parse(_ object: [String: Any], _ source: Harness) throws -> CompletionEvent? {
-    try CompletionEvent.parse(JSONSerialization.data(withJSONObject: object), source: source)
-}
-
-let codex: [String: Any] = ["type": "agent-turn-complete", "thread-id": "one", "turn-id": "two",
-                            "last-assistant-message": "  Done 👋 नमस्ते  ", "input-messages": ["Do not speak this prompt"]]
-let event = try parse(codex, .codex)!
-require(event.text == "Done 👋 नमस्ते", "Only final text should be read, preserving Unicode")
-require(try parse(codex, .codex)!.id == event.id, "Retry must preserve delivery identity")
-var next = codex
-next["turn-id"] = "three"
-require(try parse(next, .codex)!.id != event.id, "Separate turns may have identical answers")
-require(try parse(["type": "approval-requested", "last-assistant-message": "Approve"], .codex) == nil,
-        "Non-completion events must be ignored")
-let claude = try parse(["hook_event_name": "Stop", "session_id": "one", "last_assistant_message": "Final response"], .claude)
-require(claude?.text == "Final response", "Claude Stop must use the final response field")
-require(try parse(["hook_event_name": "SubagentStop", "last_assistant_message": "Internal result"], .claude) == nil,
-        "Subagent results must not be read as final answers")
-require(try parse(["hook_event_name": "Stop", "last_assistant_message": " \n "], .claude) == nil,
-        "Empty responses must not queue speech")
-do {
-    _ = try CompletionEvent.parse(Data(repeating: 32, count: CompletionEvent.maximumBytes + 1), source: .claude)
-    fatalError("Oversized payload accepted")
-} catch CompletionEvent.InputError.tooLarge { }
-let encoded = try JSONEncoder().encode(event)
-require(try JSONDecoder().decode(CompletionEvent.self, from: encoded).text == event.text, "Inbox round trip loses text")
-print("Completion contract checks passed")
-
 require(VoiceSource.identify("com.example.speech.provider.voice") == .other,
         "Unmanaged providers must not be treated as Chorus voices")
 require(VoiceSource.identify("in.onpy.Chorus.Kokoro.Synthesizer.in.onpy.chorus.kokoro.af_bella") == .kokoro,

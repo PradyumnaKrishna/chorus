@@ -1,4 +1,5 @@
 import Foundation
+import ChorusIntegrationKit
 
 @MainActor
 final class CompletionInbox: ObservableObject {
