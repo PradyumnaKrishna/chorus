@@ -1,106 +1,43 @@
 # Chorus reader
 
-Chorus reads text using macOS voices and independently installed voice providers.
-The soundwave menu-bar icon gives you playback controls even when the main window is closed.
+Chorus reads text with macOS voices and optional voice providers such as Kokoro.
 
 ## First playback
 
 Place `Chorus.app` in `~/Applications` and open it. In **Text to speech**, paste a paragraph,
-choose a macOS voice, adjust the speed, and start playback. Kokoro is optional; you do not
-need to install a model to use the voices already available on your Mac.
-
-## Build and verify
-
-Use Xcode 26+ (Swift 6.2+) and XcodeGen; the app supports macOS 14+.
-
-```sh
-make debug APP=Chorus
-make test
-```
-
-The reader is built at `build/Chorus/Build/Products/Debug/Chorus.app`.
-`Chorus.xcodeproj` contains only the reader and its completion hook. Building it does
-not prepare Kokoro dependencies. See [Build configuration](Building.md) for signing
-and Release builds.
-
-## Companion setup
-
-Build the provider with `make debug APP=Kokoro`, configuring both signing values to
-enable system voice registration. Place `Chorus Kokoro.app` in
-`~/Applications`, then open it to install its model. Chorus's **Voice apps** page can
-open the installed companion; it does not download, install, or remove apps.
-
-A release can declare a newer model than the one installed. The companion then offers
-**Upgrade** in place of Repair, and the installed model keeps working until you take it.
-
-Chorus Kokoro owns model download, verification, repair, and removal. Its model lives
-under `Artifacts/` in its team-derived App Group container. Moving the companion to
-Trash does not remove that model; use the companion's removal action first when needed.
-Return to Chorus and refresh voices after setup. App presence and registered voice
-availability are displayed separately; neither is presented as proof of model integrity.
+choose a voice, adjust the speed, and select **Read aloud**. Built-in voices work without Kokoro.
+See the [Kokoro guide](../Providers/Kokoro/README.md) to add neural voices.
 
 ## Reader behavior
 
-- Closing the main window hides the Dock icon while playback and the soundwave menu stay
-  available. Choose **Open Chorus** or **Settings…** in that menu to restore the window
-  and Dock icon. Use **Quit Chorus** to exit the app.
-- Paste text, choose a voice, and read, pause, resume, or stop. Stop clears the completion queue.
-- While reading, macOS Now Playing and the keyboard media key can pause and resume speech,
-  including when the main window is closed. Finishing or stopping clears Now Playing.
-- Choose Compact, Full, or Disabled floating player in Settings.
-- Control–Option–Command–P toggles the floating player. Command–period stops speech and
-  clears the queue globally. Hide preserves playback.
+- Closing the window hides the Dock icon; playback and menu-bar controls remain active.
+  Choose **Open Chorus** to restore the window or **Quit Chorus** to exit.
+- Pause and resume with Chorus, the floating player, or the keyboard media key.
+- Choose Compact, Full, or Disabled floating player in **Settings**.
+- Control–Option–Command–P toggles the player. Command–period stops speech and clears the
+  completion queue. Hiding the player does not stop speech.
 - Selection reading is opt-in on the floating player and requires Accessibility permission.
-  It resets at launch; hiding the player disables it. Clipboard and full-document reads
-  are not used for selection monitoring.
-- Integrations install their Chorus hook once after confirmation while preserving unrelated
-  settings and hooks. Turning listening off leaves that configuration in place. Manual instructions
-  remain available until setup is detected. Only final completion text is queued locally. Markdown formatting,
-  link destinations, harness UI directives, and fenced code are removed before speech.
-  Custom `CODEX_HOME` and `CLAUDE_CONFIG_DIR` locations are respected when available to Chorus.
-
-`make test` checks the reader, engine, and installer contracts. Native playback, global
-shortcuts, Accessibility permissions, and provider registration should also be exercised on
-a destination Mac.
+  It resets at launch, and hiding the player disables it.
 
 ## CLI integrations
 
-Open **Integrations** and enable the CLI you want to connect. Confirm setup, restart the CLI,
-then approve the Chorus hook in Codex's `/hooks` screen or Claude Code's security prompt. Chorus
-preserves unrelated configuration and provides manual instructions if automatic setup fails.
-These integrations are for CLI sessions, not desktop assistant applications.
+Open **Integrations**, enable Codex or Claude Code, and confirm setup. Restart the CLI, then
+approve the Chorus hook in Codex's `/hooks` screen or Claude Code's security prompt. If setup
+fails, Chorus displays the configuration to merge manually. Existing settings are preserved.
 
-Preserve existing hooks when merging the generated JSON. Codex uses its main-thread `Stop`
-hook instead of the broader legacy `notify` callback, so title generation, subagents, and
-other internal completions are not queued.
+Integrations apply to CLI sessions. Turning one off pauses reading without removing its hook.
+Only the main turn's final answer is queued, and formatting and code are omitted from speech.
+Custom `CODEX_HOME` and `CLAUDE_CONFIG_DIR` locations are supported.
 
 ## Troubleshooting
 
-- **Missing Kokoro voices:** open the companion, complete installation or repair, then
-  refresh voices in Chorus. Confirm you are using a signed provider build.
+- **Missing Kokoro voices:** open the companion, install or repair the model, then refresh
+  voices in Chorus. Confirm that the companion is signed.
 - **Wrong companion opens:** Chorus prefers `~/Applications/Chorus Kokoro.app`, then
-  `/Applications/Chorus Kokoro.app`, then macOS's registered location. Keep the intended
-  copy in `~/Applications` and quit old copies.
+  `/Applications/Chorus Kokoro.app`, then macOS's registered location.
 - **Selection reading does nothing:** enable it on the floating player and check Chorus's
   Accessibility permission. The source app must expose selected text through Accessibility.
 - **No highlighting with Kokoro:** open the companion and choose **Upgrade** if it offers one.
-- **Player shortcut unavailable:** check Settings and whether another app uses the same
-  shortcut. The soundwave menu can still show the player.
-- **Downloaded app blocked:** check the release's signing notes. Unsigned and development-signed
-  builds are not notarized distribution builds. Do not disable system-wide security protections.
-
-## Future hosted manifests (not implemented)
-
-A hosted release catalog can describe reader and companion app updates independently:
-schema version, bundle identifier, app version/build, minimum macOS version, architecture,
-HTTPS archive URL, byte count, checksum, and expected signing identity.
-
-Each companion can own a separate model manifest derived from its existing `Provider.json`:
-model revision, engine compatibility, and the verified artifact list. Model updates must
-remain compatible with the installed engine and bundled tokenizer/voice resources. Keep
-local installation metadata so changing a feed cannot change which files an uninstall owns.
-
-Before enabling remote feeds, specify authenticity verification, rollback behavior, and
-atomic update semantics. HTTPS and checksums alone do not establish release authorship.
-The embedded provider manifest remains authoritative in this version; no remote manifest
-is fetched and no executable download flow is included.
+- **Player shortcut unavailable:** another app may already use it; use the menu-bar player.
+- **Downloaded app blocked:** use a signed, notarized distribution build. Do not disable
+  system-wide security protections.

@@ -2,27 +2,21 @@
 
 ## Product boundary
 
-The Chorus reader (`Hub`) uses macOS speech APIs and a completion hook (`CLI`) sharing
-completion contracts through `ChorusIntegrationKit`. It opens an installed companion
-for model maintenance, but does not embed providers or access their model containers.
-Companion downloads and remote update feeds remain deferred.
+The Chorus reader (`Hub`) uses macOS speech APIs. Its bundled helper (`CLI`) receives coding
+assistant completions, and both share `ChorusIntegrationKit`. The reader can open provider
+companions but does not install their models or access their containers.
 
 CLI integrations use main-thread `Stop` hooks and reject subagent lifecycle events. The
 Codex parser retains legacy `notify` compatibility for existing installations. The reader
-merges its identified command into user-level JSON settings once; unsupported settings
-fall back to manual setup. Before a completion enters the local
-inbox, `SpeechText` parses GitHub-flavored Markdown and renders it into provider-independent
-plain text: prose and link labels remain, UI directives are removed, tables become
-comma-delimited rows, and fenced code is announced but not read verbatim.
-The reader continues to use `AVSpeechUtterance(string:)`; assistant content is never
-interpreted as SSML. Manual reader text and Accessibility selections remain literal.
+merges its command into user-level settings and falls back to manual setup for unsupported
+files. `SpeechText` converts completion Markdown to plain text before queueing it. Manual
+text and Accessibility selections remain literal.
 
 `ChorusIntegrationKit` is a separate Swift package target so the hook and reader consume
-one tested contract. Its Swift Markdown dependency is pinned in `Package.resolved`.
+one tested contract.
 
 Each app's `Project.yml` declares its own project, scheme, version, and build number.
-`Chorus.xcodeproj` and `Kokoro.xcodeproj` are generated independently, with outputs under
-`build/Chorus/` and `build/Kokoro/`. [Build configuration](Building.md).
+Projects and build outputs are generated independently. See [Building](Building.md).
 
 Each provider is a containing app with exactly one speech synthesis extension:
 
@@ -32,47 +26,36 @@ Chorus Kokoro.app
 └── Contents/PlugIns/KokoroSynthesizer.appex   engine + voices
 ```
 
-The app installs the model; the extension speaks. Providers never load one another's code.
-
-Word markers come from timings the model reports. The extension probes for that output at
-load, so a model predating it still speaks.
+The app installs the model; the extension speaks. Word highlighting uses model timing output,
+but older models without timings still support speech.
 
 ## ChorusKit
 
-Two libraries, split by what an app extension can link:
+The shared package separates extension-safe code from UI code:
 
-- **`ChorusProviderKit`** — Foundation only: manifest parsing, the artifact store, and
-  downloading. Linked by both the app and the extension.
-- **`ChorusInstallerUI`** — AppKit and SwiftUI: the installer window. Linked by the app.
+- **`ChorusProviderKit`** — Foundation-only manifests, downloads, and artifact storage.
+- **`ChorusInstallerUI`** — AppKit and SwiftUI installer UI.
+- **`ChorusIntegrationKit`** — completion parsing and hook configuration.
 
-That boundary is why a provider never restates artifact layout its manifest already
-declares. The extension asks `ArtifactStore` where the model is and whether it is installed,
-using the same `Provider.json` the installer wrote against.
+The provider app and extension use the same `Provider.json`, so artifact layout has one source
+of truth.
 
 ## Installer contract
 
-`ProviderDescriptor` is the whole interface between a provider and the installer. Every
-artifact declares a stable identifier, an HTTPS source, a relative destination, an exact
-byte count, and a SHA-256 digest.
+`ProviderDescriptor` defines the provider and its artifacts. Each artifact has an identifier,
+HTTPS source, relative destination, byte count, and SHA-256 digest.
 
 `ArtifactStore` reports absent, outdated, or installed rather than a boolean, so a manifest
 declaring a new artifact offers an upgrade instead of appearing uninstalled.
 
-Install and repair download everything before committing anything, and verification
-completes before an existing file is touched. During the commit, existing files are backed
-up and restored if any operation fails. Uninstall removes only declared paths.
+Install and repair verify all downloads before replacing existing files. Failed commits restore
+the previous files. Uninstall removes only paths declared by the installed provider.
 
 ## App group and signing
 
-macOS grants a sandboxed app its group container on the strength of the team identifier in
-its code signature, so the `<team>.<name>` form needs no portal registration and no
-provisioning profile. That is what lets any contributor build with their own team.
-
-No team identifier is committed. A provider declares `CHORUS_GROUP_NAME`;
-`CHORUS_APP_GROUP` prefixes it with `$(DEVELOPMENT_TEAM)`, and the build expands that one
-value into both entitlements files and the `ChorusAppGroup` key of both `Info.plist` files.
-The team reaches `xcodebuild` rather than XcodeGen, so the generated project names no team
-and is identical for everyone.
+No development team is committed. Providers declare `CHORUS_GROUP_NAME`; the build prefixes
+it with `$(DEVELOPMENT_TEAM)` and applies the resulting App Group to the app and extension.
+This gives each signing team its own container without changing generated project files.
 
 Downloaded data lives under `Artifacts/` in that container. Only data belongs there —
 libraries, tokenizers, voice definitions, and phonemizer data stay sealed in the signed

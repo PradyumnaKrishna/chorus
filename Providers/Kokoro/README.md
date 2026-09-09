@@ -4,27 +4,23 @@
 Portuguese. The extension bundles the voice tensors, tokenizer, and espeak-ng data; the
 containing app downloads the quantized Kokoro-82M model on first run.
 
-Japanese and Chinese voices are excluded: they need a grapheme-to-phoneme path espeak-ng
-does not provide for Kokoro, and shipping them would sound wrong.
+Japanese and Chinese are excluded because the bundled phonemizer does not support them.
 
 ## Install and maintain
 
 Requires macOS 14+ on Apple Silicon. Place the signed `Chorus Kokoro.app` in
 `~/Applications`, open it, and choose **Install**. The approximately 86 MB model download
-is checked against its expected size and SHA-256 checksum before installation.
-Return to Chorus → **Voice apps** and choose **Refresh voices** after setup.
+is verified before installation. Return to Chorus and choose **Voice apps → Refresh voices**.
 
 Use **Repair** to download fresh verified model files, or **Upgrade** when a release
 declares a newer model than the one installed. Use **Uninstall** to remove the downloaded
-files owned by this provider. To remove the app completely, uninstall the model first, quit
-the app, then move it to Trash; deleting only the app leaves its model behind.
+model. Uninstall the model before moving the app to Trash; deleting only the app leaves the
+model behind.
 
 Models live under `Artifacts/` in the companion's team-derived App Group container, not
-inside the app bundle. A build signed by another team uses a different container. Installing
-in `~/Applications` sets up the companion for your current macOS account, not every user.
+inside the app. A build signed by another team uses a different container.
 
-Unsigned builds are for development inspection; usable system voice registration requires
-signing. See [Building](../../Documentation/Building.md#signing).
+System voice registration requires signing. See [Building](../../Documentation/Building.md#signing).
 
 ## Development
 
@@ -37,9 +33,8 @@ signing. See [Building](../../Documentation/Building.md#signing).
 | `Resources` | `artifacts.sha256`, pinning the bundled voice and tokenizer files |
 | `BuildSupport` | Dependency preparation and the engine smoke test |
 
-Build from the repository root with `make debug APP=Kokoro`. This creates
-`Kokoro.xcodeproj` and writes outputs under `build/Kokoro/`. Configure both signing
-values as described in [Building](../../Documentation/Building.md) for usable system voices.
+Build from the repository root with `make debug APP=Kokoro`. See
+[Building](../../Documentation/Building.md) for output and signing details.
 
 ## License
 
