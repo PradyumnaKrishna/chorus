@@ -224,11 +224,11 @@ struct PlaybackOverlayView: View {
             }.buttonStyle(.borderless)
             if captions {
                 HighlightedExcerpt(text: player.spokenText, range: player.wordRange)
-                    .font(.system(size: 14)).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                    .font(.system(size: 14)).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(captions ? 12 : 6)
-        .frame(width: captions ? 340 : 176, height: captions ? 100 : 44)
+        .frame(width: captions ? 340 : 176, height: captions ? 80 : 44)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: captions ? 18 : 24))
         .overlay(RoundedRectangle(cornerRadius: captions ? 18 : 24).stroke(.white.opacity(0.15)))
         .contextMenu { Button("Hide mini player", action: dismiss) }
