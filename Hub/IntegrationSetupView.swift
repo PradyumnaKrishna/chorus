@@ -22,7 +22,7 @@ struct IntegrationSetupView: View {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange).font(.callout)
             }
-            Text("Merge this configuration into your existing settings, then restart your coding assistant.")
+            Text("Merge this configuration into your existing settings, then restart your coding assistant and approve the new hook if prompted.")
                 .font(.callout).fixedSize(horizontal: false, vertical: true)
             Text((configuration.file.path as NSString).abbreviatingWithTildeInPath)
                 .font(.system(.callout, design: .monospaced)).textSelection(.enabled)
@@ -30,7 +30,9 @@ struct IntegrationSetupView: View {
                 Text(configuration.snippet)
                     .font(.system(size: 12, design: .monospaced)).textSelection(.enabled).padding(14)
             }.frame(height: 215).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 10))
-            Text("Preserve existing hooks when merging. This asynchronous Stop hook sends only the main turn's final answer.")
+            Text(source == .codex
+                 ? "Preserve existing hooks when merging. In Codex, open /hooks and approve the new Chorus hook before using it."
+                 : "Preserve existing hooks when merging. In Claude Code, approve the new Chorus hook when prompted before using it.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Text("CLI sessions only").font(.caption).foregroundStyle(.secondary)

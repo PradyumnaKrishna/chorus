@@ -44,7 +44,11 @@ final class IntegrationController: ObservableObject {
             try configuration(for: source).install()
             configured.insert(source)
             setListening(true, for: source)
-            inbox.status = "\(source.title) configured. Restart it to begin reading responses."
+            if source == .codex {
+                inbox.status = "Codex configured. Restart it, then approve the new Chorus hook in /hooks."
+            } else {
+                inbox.status = "Claude Code configured. Restart it, then approve the new Chorus hook when prompted."
+            }
         } catch {
             setListening(false, for: source)
             manualSetup = ManualSetup(source: source, error: error.localizedDescription)

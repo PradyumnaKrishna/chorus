@@ -65,10 +65,10 @@ a destination Mac.
 
 ## CLI integrations
 
-Open **Integrations** and enable the CLI you want to connect. Confirm setup, then restart the
-CLI. Chorus merges its hook into the user-level settings and preserves unrelated configuration.
-These integrations are for CLI sessions, not desktop assistant applications. If automatic
-setup fails, Chorus opens manual instructions with the generated configuration.
+Open **Integrations** and enable the CLI you want to connect. Confirm setup, restart the CLI,
+then approve the Chorus hook in Codex's `/hooks` screen or Claude Code's security prompt. Chorus
+preserves unrelated configuration and provides manual instructions if automatic setup fails.
+These integrations are for CLI sessions, not desktop assistant applications.
 
 Preserve existing hooks when merging the generated JSON. Codex uses its main-thread `Stop`
 hook instead of the broader legacy `notify` callback, so title generation, subagents, and
